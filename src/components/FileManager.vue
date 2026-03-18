@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
+import FilePreview from './FilePreview.vue'
 import {
   FolderPlus,
   Upload,
@@ -23,6 +24,7 @@ interface FileItem {
   name: string
   type: 'file'
   fileType?: 'image' | 'document' | 'code' | 'other'
+  rawFile?: File
 }
 
 interface FolderItem {
@@ -35,6 +37,7 @@ interface FolderItem {
 
 interface SelectedFile extends FileItem {
   folderName: string
+  rawFile?: File
 }
 
 // Initial data
@@ -176,6 +179,7 @@ function handleUploadFile() {
   const input = document.createElement('input')
   input.type = 'file'
   input.multiple = true
+  input.accept = '.doc,.docx,.xls,.xlsx,.csv,.pdf,.png,.jpg,.jpeg,.gif,.svg,.webp,.img,.md,.txt'
   input.onchange = (e) => {
     const files = (e.target as HTMLInputElement).files
     if (files && files.length > 0 && folders.value.length > 0) {
@@ -184,6 +188,7 @@ function handleUploadFile() {
         name: file.name,
         type: 'file' as const,
         fileType: getFileTypeFromName(file.name),
+        rawFile: file,
       }))
       // 优先放到选中的文件夹，否则放到第一个文件夹
       const targetFolder = selectedFolderId.value
@@ -372,32 +377,36 @@ function getFileTypeDescription(fileType?: string): string {
             <p class="preview-file-location">位置: {{ selectedFile.folderName }}</p>
           </div>
           <div id="preview-actions" class="preview-actions">
-            <button class="fm-btn">
-              <Eye :size="16" />
-              <span>预览</span>
-            </button>
+            <span class="preview-type-badge">
+              {{ getFileTypeLabel(selectedFile.fileType) }}
+            </span>
           </div>
         </div>
 
         <!-- Preview Content -->
         <div id="preview-content" class="preview-content">
-          <div id="preview-content-inner" class="preview-content-inner">
-            <component
-              :is="selectedFile.fileType === 'image' ? Image :
-                   selectedFile.fileType === 'document' ? FileText :
-                   selectedFile.fileType === 'code' ? FileCode : File"
-              :size="64"
-              :class="['preview-file-icon',
-                selectedFile.fileType === 'image' ? 'icon-green' :
-                selectedFile.fileType === 'document' ? 'icon-blue' :
-                selectedFile.fileType === 'code' ? 'icon-purple' : 'icon-gray']"
-            />
-            <p class="preview-filename-large">{{ selectedFile.name }}</p>
-            <p class="preview-filetype-label">{{ getFileTypeLabel(selectedFile.fileType) }}</p>
-            <div id="preview-info-card" class="preview-info-card">
-              <p class="preview-info-text">{{ getFileTypeDescription(selectedFile.fileType) }}</p>
+          <template v-if="selectedFile.rawFile">
+            <FilePreview :file="selectedFile.rawFile" :file-name="selectedFile.name" />
+          </template>
+          <template v-else>
+            <div id="preview-content-inner" class="preview-content-inner">
+              <component
+                :is="selectedFile.fileType === 'image' ? Image :
+                     selectedFile.fileType === 'document' ? FileText :
+                     selectedFile.fileType === 'code' ? FileCode : File"
+                :size="64"
+                :class="['preview-file-icon',
+                  selectedFile.fileType === 'image' ? 'icon-green' :
+                  selectedFile.fileType === 'document' ? 'icon-blue' :
+                  selectedFile.fileType === 'code' ? 'icon-purple' : 'icon-gray']"
+              />
+              <p class="preview-filename-large">{{ selectedFile.name }}</p>
+              <p class="preview-filetype-label">{{ getFileTypeLabel(selectedFile.fileType) }}</p>
+              <div id="preview-info-card" class="preview-info-card">
+                <p class="preview-info-text">{{ getFileTypeDescription(selectedFile.fileType) }}</p>
+              </div>
             </div>
-          </div>
+          </template>
         </div>
       </template>
 
@@ -407,7 +416,8 @@ function getFileTypeDescription(fileType?: string): string {
             <Eye :size="48" class="preview-empty-icon" />
           </div>
           <p class="preview-empty-title">选择文件以预览</p>
-          <p class="preview-empty-hint">从左侧目录树中选择一个文件</p>
+          <p class="preview-empty-hint">上传文件后，在左侧目录树中选择即可预览</p>
+          <p class="preview-supported-formats">支持格式: DOC DOCX XLS XLSX CSV PDF PNG JPG MD TXT</p>
         </div>
       </template>
     </div>
@@ -804,9 +814,7 @@ function getFileTypeDescription(fileType?: string): string {
 .preview-content {
   flex: 1;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 32px;
+  overflow: hidden;
 }
 
 .preview-content-inner {
@@ -876,6 +884,28 @@ function getFileTypeDescription(fileType?: string): string {
   font-size: 0.875rem;
   color: var(--color-text-muted);
   margin-top: 4px;
+}
+
+.preview-supported-formats {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  margin-top: 12px;
+  padding: 8px 16px;
+  background: var(--color-hover);
+  border-radius: var(--radius-md);
+  letter-spacing: 0.5px;
+  opacity: 0.7;
+}
+
+.preview-type-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-accent-blue);
+  background: rgba(59, 130, 246, 0.08);
+  border-radius: var(--radius-full);
 }
 
 /* ===== Dialog ===== */
