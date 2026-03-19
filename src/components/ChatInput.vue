@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { Plus, Send, X, FileText, Image, Film, Music, Archive, File } from 'lucide-vue-next'
+import { useChatStore } from '../stores/chat'
 
+const chatStore = useChatStore()
 const inputText = ref('')
 const fileInputRef = ref<HTMLInputElement | null>(null)
 
@@ -17,6 +19,20 @@ interface UploadFile {
 const uploadedFiles = ref<UploadFile[]>([])
 
 const hasFiles = computed(() => uploadedFiles.value.length > 0)
+
+function handleSend() {
+  const text = inputText.value.trim()
+  if (!text) return
+  chatStore.sendMessage(text)
+  inputText.value = ''
+}
+
+function handleKeydown(e: KeyboardEvent) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault()
+    handleSend()
+  }
+}
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return bytes + ' B'
@@ -126,6 +142,7 @@ function removeFile(id: string) {
           type="text"
           placeholder="问问 Gemini 3"
           class="text-input"
+          @keydown="handleKeydown"
         />
       </div>
 
@@ -134,7 +151,7 @@ function removeFile(id: string) {
         <button id="add-attachment-btn" class="toolbar-btn" aria-label="添加附件" @click="triggerFileInput">
           <Plus :size="20" />
         </button>
-        <button id="send-btn" class="send-btn" aria-label="发送">
+        <button id="send-btn" class="send-btn" aria-label="发送" @click="handleSend">
           <Send :size="16" />
         </button>
       </div>

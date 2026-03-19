@@ -2,14 +2,17 @@
 import AppSidebar from './components/AppSidebar.vue'
 import AppHeader from './components/AppHeader.vue'
 import ChatInput from './components/ChatInput.vue'
+import ChatMessages from './components/ChatMessages.vue'
 import FileManager from './components/FileManager.vue'
 import { Sparkles } from 'lucide-vue-next'
 import { Menu } from 'lucide-vue-next'
 import { useSidebarStore } from './stores/sidebar'
 import { useViewStore } from './stores/view'
+import { useChatStore } from './stores/chat'
 
 const sidebarStore = useSidebarStore()
 const viewStore = useViewStore()
+const chatStore = useChatStore()
 </script>
 
 <template>
@@ -34,18 +37,32 @@ const viewStore = useViewStore()
       <AppHeader />
 
       <!-- Content Area -->
-      <div v-if="viewStore.currentView === 'chat'" id="content-area" class="content-area">
-        <!-- Greeting -->
-        <div id="greeting" class="greeting">
-          <div id="greeting-line" class="greeting-line">
-            <Sparkles :size="20" class="sparkle-icon" />
-            <span id="greeting-sub" class="greeting-sub">锋，你好</span>
+      <div v-if="viewStore.currentView === 'chat'" id="content-area" class="content-area" :class="{ 'content-area--chatting': chatStore.hasMessages }">
+
+        <!-- 欢迎页模式：无消息时显示 -->
+        <div v-if="!chatStore.hasMessages" class="welcome-view">
+          <div id="greeting" class="greeting">
+            <div id="greeting-line" class="greeting-line">
+              <Sparkles :size="20" class="sparkle-icon" />
+              <span id="greeting-sub" class="greeting-sub">锋，你好</span>
+            </div>
+            <h1 id="greeting-title" class="greeting-title">需要我为你做些什么？</h1>
           </div>
-          <h1 id="greeting-title" class="greeting-title">需要我为你做些什么？</h1>
+
+          <!-- Chat Input (居中) -->
+          <ChatInput />
         </div>
 
-        <!-- Chat Input -->
-        <ChatInput />
+        <!-- 聊天模式：有消息时显示 -->
+        <template v-else>
+          <!-- 消息列表 -->
+          <ChatMessages />
+
+          <!-- Chat Input (底部) -->
+          <div class="chat-input-bottom">
+            <ChatInput />
+          </div>
+        </template>
       </div>
 
       <!-- File Manager -->
@@ -99,9 +116,24 @@ const viewStore = useViewStore()
   display: flex;
   flex: 1;
   flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* 欢迎页 - 居中布局 */
+.welcome-view {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: 0 var(--space-lg);
+  animation: fadeIn 0.4s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .greeting {
@@ -133,8 +165,23 @@ const viewStore = useViewStore()
   line-height: 1.3;
 }
 
+/* 聊天模式 - 底部输入框 */
+.chat-input-bottom {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+  padding: 0 var(--space-lg) var(--space-lg);
+  animation: slideUp 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .files-area {
   flex: 1;
   overflow: hidden;
 }
 </style>
+
