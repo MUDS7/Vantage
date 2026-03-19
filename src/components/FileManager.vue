@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import FilePreview from './FilePreview.vue'
 import {
   FolderPlus,
@@ -93,6 +93,10 @@ const activeMenuId = ref<string | null>(null)
 const renamingId = ref<string | null>(null)
 const renameValue = ref('')
 
+// 删除确认对话框
+const isDeleteDialogOpen = ref(false)
+const pendingDelete = ref<{ type: 'folder' | 'file'; id: string; name: string; parentFolder?: FolderItem } | null>(null)
+
 function toggleMenu(id: string) {
   activeMenuId.value = activeMenuId.value === id ? null : id
 }
@@ -100,6 +104,21 @@ function toggleMenu(id: string) {
 function closeMenu() {
   activeMenuId.value = null
 }
+
+// 点击外部关闭菜单
+function handleGlobalClick() {
+  if (activeMenuId.value) {
+    closeMenu()
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', handleGlobalClick)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleGlobalClick)
+})
 
 function getFileTypeFromName(filename: string): 'image' | 'document' | 'code' | 'other' {
   const ext = filename.split('.').pop()?.toLowerCase()
@@ -138,12 +157,38 @@ function createFolder() {
   }
 }
 
-function deleteFolder(id: string) {
-  if (selectedFolderId.value === id) {
-    selectedFolderId.value = null
-  }
-  folders.value = folders.value.filter((f) => f.id !== id)
+function requestDeleteFolder(folder: FolderItem) {
+  pendingDelete.value = { type: 'folder', id: folder.id, name: folder.name }
+  isDeleteDialogOpen.value = true
   closeMenu()
+}
+
+function requestDeleteFile(item: FileItem | FolderItem, folder: FolderItem) {
+  pendingDelete.value = { type: 'file', id: item.id, name: item.name, parentFolder: folder }
+  isDeleteDialogOpen.value = true
+  closeMenu()
+}
+
+function confirmDelete() {
+  if (!pendingDelete.value) return
+  if (pendingDelete.value.type === 'folder') {
+    if (selectedFolderId.value === pendingDelete.value.id) {
+      selectedFolderId.value = null
+    }
+    folders.value = folders.value.filter((f) => f.id !== pendingDelete.value!.id)
+  } else {
+    const folder = pendingDelete.value.parentFolder!
+    folder.children = folder.children.filter((c) => c.id !== pendingDelete.value!.id)
+    if (selectedFile.value?.id === pendingDelete.value.id) {
+      selectedFile.value = null
+    }
+  }
+  cancelDelete()
+}
+
+function cancelDelete() {
+  isDeleteDialogOpen.value = false
+  pendingDelete.value = null
 }
 
 function startRename(item: FolderItem | FileItem) {
@@ -165,14 +210,6 @@ function confirmRename(item: FolderItem | FileItem) {
 
 function cancelRename() {
   renamingId.value = null
-}
-
-function deleteFile(fileId: string, folder: FolderItem) {
-  folder.children = folder.children.filter((c) => c.id !== fileId)
-  if (selectedFile.value?.id === fileId) {
-    selectedFile.value = null
-  }
-  closeMenu()
 }
 
 function handleUploadFile() {
@@ -291,7 +328,7 @@ function getFileTypeDescription(fileType?: string): string {
                       <Pencil :size="14" />
                       <span>重命名</span>
                     </button>
-                    <button class="dropdown-item danger" @click="deleteFolder(folder.id)">
+                    <button class="dropdown-item danger" @click="requestDeleteFolder(folder)">
                       <Trash2 :size="14" />
                       <span>删除</span>
                     </button>
@@ -353,7 +390,7 @@ function getFileTypeDescription(fileType?: string): string {
                         <Pencil :size="14" />
                         <span>重命名</span>
                       </button>
-                      <button class="dropdown-item danger" @click="deleteFile(item.id, folder)">
+                      <button class="dropdown-item danger" @click="requestDeleteFile(item, folder)">
                         <Trash2 :size="14" />
                         <span>删除</span>
                       </button>
@@ -446,6 +483,27 @@ function getFileTypeDescription(fileType?: string): string {
         </div>
       </div>
     </Teleport>
+
+    <!-- Delete Confirm Dialog -->
+    <Teleport to="body">
+      <div v-if="isDeleteDialogOpen" id="delete-dialog-overlay" class="dialog-overlay" @click.self="cancelDelete">
+        <div id="delete-dialog-content" class="dialog-content">
+          <div id="delete-dialog-header" class="dialog-header">
+            <h3 class="dialog-title delete-title">确认删除</h3>
+            <p class="dialog-description">
+              确定要删除{{ pendingDelete?.type === 'folder' ? '文件夹' : '文件' }}
+              「<strong>{{ pendingDelete?.name }}</strong>」吗？
+              <template v-if="pendingDelete?.type === 'folder'">其中的所有文件也将被删除。</template>
+              此操作不可撤销。
+            </p>
+          </div>
+          <div id="delete-dialog-footer" class="dialog-footer">
+            <button class="fm-btn secondary" @click="cancelDelete">取消</button>
+            <button class="fm-btn danger" @click="confirmDelete">删除</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -520,6 +578,21 @@ function getFileTypeDescription(fileType?: string): string {
 
 .fm-btn.secondary {
   background: transparent;
+}
+
+.fm-btn.danger {
+  background: #ef4444;
+  color: #fff;
+  border-color: #ef4444;
+}
+
+.fm-btn.danger:hover {
+  background: #dc2626;
+  border-color: #dc2626;
+}
+
+.delete-title {
+  color: #ef4444;
 }
 
 /* ===== Empty state ===== */
