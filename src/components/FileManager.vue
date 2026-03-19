@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import FilePreview from './FilePreview.vue'
+import { API_BASE_URL } from '@/config'
 import {
   FolderPlus,
   Upload,
@@ -33,6 +34,7 @@ interface FolderItem {
   type: 'folder'
   children: (FileItem | FolderItem)[]
   isExpanded?: boolean
+  fileCount?: number
 }
 
 interface SelectedFile extends FileItem {
@@ -41,47 +43,28 @@ interface SelectedFile extends FileItem {
 }
 
 // Initial data
-const folders = ref<FolderItem[]>([
-  {
-    id: '1',
-    name: '项目文档',
-    type: 'folder',
-    isExpanded: false,
-    children: [
-      { id: '1-1', name: '需求说明.docx', type: 'file', fileType: 'document' },
-      { id: '1-2', name: '设计稿.png', type: 'file', fileType: 'image' },
-      { id: '1-3', name: '接口文档.md', type: 'file', fileType: 'code' },
-    ],
-  },
-  {
-    id: '2',
-    name: '图片素材',
-    type: 'folder',
-    isExpanded: false,
-    children: [
-      { id: '2-1', name: 'logo.png', type: 'file', fileType: 'image' },
-      { id: '2-2', name: 'banner.jpg', type: 'file', fileType: 'image' },
-    ],
-  },
-  {
-    id: '3',
-    name: '代码文件',
-    type: 'folder',
-    isExpanded: false,
-    children: [
-      { id: '3-1', name: 'index.tsx', type: 'file', fileType: 'code' },
-      { id: '3-2', name: 'styles.css', type: 'file', fileType: 'code' },
-      { id: '3-3', name: 'utils.ts', type: 'file', fileType: 'code' },
-    ],
-  },
-  {
-    id: '4',
-    name: '其他资料',
-    type: 'folder',
-    isExpanded: false,
-    children: [],
-  },
-])
+const folders = ref<FolderItem[]>([])
+
+const fetchFolders = async () => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/folders`)
+    if (response.ok) {
+      const data = await response.json()
+      folders.value = data.map((item: any) => ({
+        id: 'folder-' + item.name + '-' + Date.now(),
+        name: item.name,
+        type: 'folder',
+        isExpanded: false,
+        children: [],
+        fileCount: item.file_count
+      }))
+    } else {
+      console.error('获取文件夹列表失败', response.status)
+    }
+  } catch (error) {
+    console.error('获取文件夹列表异常:', error)
+  }
+}
 
 const selectedFile = ref<SelectedFile | null>(null)
 const selectedFolderId = ref<string | null>(null)
@@ -114,6 +97,7 @@ function handleGlobalClick() {
 
 onMounted(() => {
   document.addEventListener('click', handleGlobalClick)
+  fetchFolders()
 })
 
 onUnmounted(() => {
@@ -317,7 +301,7 @@ function getFileTypeDescription(fileType?: string): string {
               <!-- Normal display -->
               <template v-else>
                 <span class="folder-name" @click="selectFolder(folder)">{{ folder.name }}</span>
-                <span class="folder-count">{{ folder.children.length }}</span>
+                <span class="folder-count">{{ folder.fileCount !== undefined ? folder.fileCount : folder.children.length }}</span>
                 <div :id="'folder-menu-wrapper-' + folder.id" class="folder-menu-wrapper">
                   <button class="folder-menu-btn" @click.stop="toggleMenu(folder.id)">
                     <MoreHorizontal :size="16" />
