@@ -16,6 +16,8 @@ const pdfUrl = ref<string | null>(null)
 const htmlContent = ref<string | null>(null)
 const textContent = ref<string | null>(null)
 const tableData = ref<{ headers: string[]; rows: string[][] } | null>(null)
+const excelSheets = ref<{ name: string; data: { headers: string[]; rows: string[][] } }[]>([])
+const activeSheetIndex = ref(0)
 const isDocxPreview = ref(false)
 const docxContainer = ref<HTMLElement | null>(null)
 
@@ -30,6 +32,15 @@ let resizing = false
 let resizeColIndex = -1
 let resizeStartX = 0
 let resizeStartWidth = 0
+
+function switchSheet(index: number) {
+  activeSheetIndex.value = index
+  tableData.value = excelSheets.value[index]?.data ?? null
+  columnWidths.value = [] // clear before recalculating
+  nextTick(() => {
+    initColumnWidths()
+  })
+}
 
 function initColumnWidths() {
   if (!tableData.value || tableData.value.headers.length === 0) return
@@ -593,6 +604,8 @@ function cleanup() {
   htmlContent.value = null
   textContent.value = null
   tableData.value = null
+  excelSheets.value = []
+  activeSheetIndex.value = 0
   columnWidths.value = []
   isDocxPreview.value = false
   // 清空 docx-preview 容器
@@ -686,34 +699,38 @@ async function loadPreview(file: File | null, fileName: string) {
         const XLSX = await import('xlsx')
         const arrayBuffer = await file.arrayBuffer()
         const workbook = XLSX.read(arrayBuffer, { type: 'array' })
-        const sheetName = workbook.SheetNames[0]
-        if (!sheetName) {
-          tableData.value = { headers: [], rows: [] }
-          break
-        }
-        const firstSheet = workbook.Sheets[sheetName]
-        const jsonData = XLSX.utils.sheet_to_json<string[]>(firstSheet!, { header: 1 })
-        if (jsonData.length > 0) {
-          // 找出所有行中的最大列数，防止空表头列被截断
-          let maxCols = 0
-          for (const row of jsonData) {
-            if ((row as string[]).length > maxCols) maxCols = (row as string[]).length
-          }
-          // 补齐 headers 到 maxCols
-          const rawHeaders = jsonData[0] as string[]
-          const headers: string[] = []
-          for (let i = 0; i < maxCols; i++) {
-            headers.push(String(rawHeaders[i] ?? ''))
-          }
-          // 补齐每行数据到 maxCols
-          const rows = jsonData.slice(1).map((row) => {
-            const cells: string[] = []
-            for (let i = 0; i < maxCols; i++) {
-              cells.push(String((row as string[])[i] ?? ''))
+        
+        const sheets = []
+        for (const sheetName of workbook.SheetNames) {
+          const sheet = workbook.Sheets[sheetName]
+          const jsonData = XLSX.utils.sheet_to_json<string[]>(sheet!, { header: 1 })
+          let headers: string[] = []
+          let rows: string[][] = []
+          
+          if (jsonData.length > 0) {
+            let maxCols = 0
+            for (const row of jsonData) {
+              if ((row as string[]).length > maxCols) maxCols = (row as string[]).length
             }
-            return cells
-          })
-          tableData.value = { headers, rows }
+            const rawHeaders = jsonData[0] as string[]
+            for (let i = 0; i < maxCols; i++) {
+              headers.push(String(rawHeaders[i] ?? ''))
+            }
+            rows = jsonData.slice(1).map((row) => {
+              const cells: string[] = []
+              for (let i = 0; i < maxCols; i++) {
+                cells.push(String((row as string[])[i] ?? ''))
+              }
+              return cells
+            })
+          }
+          sheets.push({ name: sheetName, data: { headers, rows } })
+        }
+        
+        excelSheets.value = sheets
+        activeSheetIndex.value = 0
+        if (sheets.length > 0) {
+          tableData.value = sheets[0]?.data ?? { headers: [], rows: [] }
         } else {
           tableData.value = { headers: [], rows: [] }
         }
@@ -815,6 +832,17 @@ onBeforeUnmount(() => {
 
     <!-- Table content (Excel / CSV) -->
     <div v-else-if="tableData" class="preview-table-container">
+      <div v-if="excelSheets.length > 1" class="excel-tabs">
+        <button 
+          v-for="(sheet, index) in excelSheets" 
+          :key="index"
+          class="excel-tab"
+          :class="{ active: activeSheetIndex === index }"
+          @click="switchSheet(index)"
+        >
+          {{ sheet.name }}
+        </button>
+      </div>
       <div v-if="tableData.headers.length === 0 && tableData.rows.length === 0" class="preview-state">
         <FileText :size="36" class="empty-table-icon" />
         <p class="state-text">表格为空</p>
@@ -1122,6 +1150,38 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.excel-tabs {
+  display: flex;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--color-border-light);
+  background: var(--color-bg);
+  padding: 0 16px;
+  flex-shrink: 0;
+}
+
+.excel-tab {
+  padding: 10px 16px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.excel-tab:hover {
+  color: var(--color-text-primary);
+  background: var(--color-hover);
+}
+
+.excel-tab.active {
+  color: var(--color-accent-blue);
+  border-bottom-color: var(--color-accent-blue);
+  font-weight: 500;
 }
 
 .table-scroll-wrapper {
