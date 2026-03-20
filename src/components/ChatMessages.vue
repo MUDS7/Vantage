@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, reactive, nextTick, watch } from 'vue'
-import { Sparkles, ThumbsUp, ThumbsDown, RefreshCw, Copy, MoreVertical, Brain, ChevronDown } from 'lucide-vue-next'
+import { Sparkles, ThumbsUp, ThumbsDown, RefreshCw, Copy, MoreVertical, Brain, ChevronDown, FileText } from 'lucide-vue-next'
 import { useChatStore } from '../stores/chat'
 import { marked } from 'marked'
 
@@ -53,6 +53,41 @@ watch(
     scrollToBottom()
   },
 )
+
+/**
+ * 格式化文件大小
+ */
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return bytes + 'B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + 'KB'
+  return (bytes / (1024 * 1024)).toFixed(1) + 'MB'
+}
+
+/**
+ * 获取文件后缀名（大写）
+ */
+function getFileExt(name: string): string {
+  const dotIdx = name.lastIndexOf('.')
+  if (dotIdx === -1) return 'FILE'
+  return name.slice(dotIdx + 1).toUpperCase()
+}
+
+/**
+ * 重新发送：删除该用户消息及其之后的所有消息，然后重新发送（带上文件）
+ */
+function resendMessage(msgId: string) {
+  const idx = chatStore.messages.findIndex((m) => m.id === msgId)
+  if (idx === -1) return
+  const msg = chatStore.messages[idx]
+  if (!msg) return
+  const content = msg.content
+  // 取出原始 File 对象
+  const files = msg.files?.map((f) => f.file).filter((f): f is File => !!f)
+  // 移除该消息及之后的所有消息
+  chatStore.messages.splice(idx)
+  // 重新发送（带上文件）
+  chatStore.sendMessage(content, files && files.length > 0 ? files : undefined)
+}
 </script>
 
 <template>
@@ -66,8 +101,38 @@ watch(
         :class="msg.role === 'user' ? 'message-row--user' : 'message-row--assistant'"
       >
         <!-- 用户消息 -->
-        <div v-if="msg.role === 'user'" class="user-bubble">
-          {{ msg.content }}
+        <div v-if="msg.role === 'user'" class="user-message-group">
+          <button
+            :id="'resend-btn-' + msg.id"
+            class="resend-btn"
+            aria-label="重新发送"
+            title="重新发送"
+            @click="resendMessage(msg.id)"
+          >
+            <RefreshCw :size="14" />
+          </button>
+          <div class="user-bubble-wrapper">
+            <!-- 文件卡片区域 -->
+            <div v-if="msg.files && msg.files.length > 0" class="msg-files-area">
+              <div
+                v-for="(file, fIdx) in msg.files"
+                :key="fIdx"
+                class="msg-file-card"
+              >
+                <div class="msg-file-icon">
+                  <FileText :size="20" />
+                </div>
+                <div class="msg-file-info">
+                  <span class="msg-file-name">{{ file.name }}</span>
+                  <span class="msg-file-meta">{{ getFileExt(file.name) }} {{ formatFileSize(file.size) }}</span>
+                </div>
+              </div>
+            </div>
+            <!-- 文字气泡 -->
+            <div class="user-bubble">
+              {{ msg.content }}
+            </div>
+          </div>
         </div>
 
         <!-- AI 消息 -->
@@ -181,9 +246,144 @@ watch(
   }
 }
 
+/* 用户消息容器（气泡 + 重新发送按钮） */
+.user-message-group {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  max-width: 80%;
+}
+
+/* 重新发送按钮 */
+.resend-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  color: var(--color-text-muted, #9ca3af);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  opacity: 0;
+  transform: translateX(8px) scale(0.8);
+  transition: opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              background 0.2s ease,
+              color 0.2s ease;
+  pointer-events: none;
+}
+
+.user-message-group:hover .resend-btn {
+  opacity: 1;
+  transform: translateX(0) scale(1);
+  pointer-events: auto;
+}
+
+.resend-btn:hover {
+  background: rgba(0, 0, 0, 0.07);
+  color: var(--color-text-primary, #374151);
+}
+
+.resend-btn:active {
+  transform: translateX(0) scale(0.9);
+}
+
+/* 点击后旋转动画 */
+.resend-btn:active svg {
+  animation: resendSpin 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes resendSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 用户消息气泡包裹器（文件卡片 + 文字气泡） */
+.user-bubble-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+/* 文件卡片区域 */
+.msg-files-area {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  align-items: flex-end;
+}
+
+.msg-file-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 14px;
+  min-width: 180px;
+  max-width: 260px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  animation: fileCardSlideIn 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes fileCardSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.msg-file-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.msg-file-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+
+.msg-file-name {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-text-primary, #1f2937);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.msg-file-meta {
+  font-size: 0.6875rem;
+  color: var(--color-text-secondary, #6b7280);
+  letter-spacing: 0.02em;
+}
+
 /* 用户消息气泡 */
 .user-bubble {
-  max-width: 80%;
   padding: 12px 20px;
   background: #f0f0f0;
   border-radius: 20px 20px 4px 20px;

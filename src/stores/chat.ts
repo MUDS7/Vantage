@@ -2,11 +2,19 @@ import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { API_BASE_URL } from '../config'
 
+export interface MessageFile {
+  name: string
+  size: number
+  type: string    // MIME type
+  file?: File     // 原始 File 对象（用于重新发送）
+}
+
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
   content: string
   reasoningContent?: string // 思维链内容（仅 assistant 消息可能有）
+  files?: MessageFile[]     // 用户消息附带的文件
   timestamp: number
 }
 
@@ -56,12 +64,21 @@ export const useChatStore = defineStore('chat', () => {
     thinkingEnabled.value = !thinkingEnabled.value
   }
 
-  async function sendMessage(content: string) {
+  async function sendMessage(content: string, files?: File[]) {
+    // 构建文件元信息
+    const messageFiles: MessageFile[] | undefined = files?.map((f) => ({
+      name: f.name,
+      size: f.size,
+      type: f.type,
+      file: f,
+    }))
+
     // 添加用户消息
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(),
       role: 'user',
       content,
+      files: messageFiles,
       timestamp: Date.now(),
     }
     messages.value.push(userMsg)
@@ -71,19 +88,27 @@ export const useChatStore = defineStore('chat', () => {
     // 移除最后一条（当前用户消息），因为 API 的 message 字段已经包含了
     const history = fullHistory.slice(0, -1)
 
-    // 构建请求体
-    const requestBody: Record<string, unknown> = {
-      message: content,
-      history,
-      session_id: sessionId.value, // 传入当前会话 ID，null 时后端自动创建新会话
+    // 使用 FormData 构建请求体（支持文件上传）
+    const formData = new FormData()
+    formData.append('message', content)
+    formData.append('history', JSON.stringify(history))
+
+    if (sessionId.value) {
+      formData.append('session_id', sessionId.value)
     }
 
     if (thinkingEnabled.value) {
-      // 思考模式方式二：使用 deepseek-chat + thinking: true
-      requestBody.model = 'deepseek-chat'
-      requestBody.thinking = true
+      formData.append('model', 'deepseek-chat')
+      formData.append('thinking', 'true')
     } else {
-      requestBody.model = 'deepseek-chat'
+      formData.append('model', 'deepseek-chat')
+    }
+
+    // 添加上传的文件
+    if (files && files.length > 0) {
+      for (const file of files) {
+        formData.append('files', file)
+      }
     }
 
     // 调用 DeepSeek API
@@ -91,10 +116,7 @@ export const useChatStore = defineStore('chat', () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/chat`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
+        body: formData,
       })
 
       const data = await response.json()

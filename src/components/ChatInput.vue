@@ -24,7 +24,19 @@ async function handleSend() {
   const text = inputText.value.trim()
   if (!text) return
   inputText.value = ''
-  await chatStore.sendMessage(text)
+
+  // 收集当前已选文件
+  const files = uploadedFiles.value.map((f) => f.file)
+
+  // 清空文件列表并释放预览 URL
+  for (const f of uploadedFiles.value) {
+    if (f.previewUrl) {
+      URL.revokeObjectURL(f.previewUrl)
+    }
+  }
+  uploadedFiles.value = []
+
+  await chatStore.sendMessage(text, files.length > 0 ? files : undefined)
 }
 
 function handleKeydown(e: KeyboardEvent) {
