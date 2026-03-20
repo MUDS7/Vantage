@@ -1,20 +1,50 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
+import { API_BASE_URL } from '../config'
 
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
   content: string
+  reasoningContent?: string // 思维链内容（仅 assistant 消息可能有）
   timestamp: number
+}
+
+interface ChatApiHistory {
+  role: 'system' | 'user' | 'assistant'
+  content: string
 }
 
 export const useChatStore = defineStore('chat', () => {
   const messages = ref<ChatMessage[]>([])
   const isTyping = ref(false)
+  const thinkingEnabled = ref(false) // 是否开启思考模式
 
   const hasMessages = computed(() => messages.value.length > 0)
 
-  function sendMessage(content: string) {
+  /**
+   * 根据当前消息列表构建 API 所需的 history 数组
+   * 包含 system prompt + 所有历史对话
+   * 注意：按照 DeepSeek 官方要求，history 中只拼接 content（reply），不拼接 reasoning_content
+   */
+  function buildHistory(): ChatApiHistory[] {
+    const history: ChatApiHistory[] = [
+      { role: 'system', content: '你是一个专业的AI助手' },
+    ]
+    for (const msg of messages.value) {
+      history.push({
+        role: msg.role,
+        content: msg.content, // 只传 content，不传 reasoningContent
+      })
+    }
+    return history
+  }
+
+  function toggleThinking() {
+    thinkingEnabled.value = !thinkingEnabled.value
+  }
+
+  async function sendMessage(content: string) {
     // 添加用户消息
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(),
@@ -24,18 +54,68 @@ export const useChatStore = defineStore('chat', () => {
     }
     messages.value.push(userMsg)
 
-    // 模拟 AI 回复
+    // 构建 history（不含本次 message，API 的 message 字段已单独传递）
+    const fullHistory = buildHistory()
+    // 移除最后一条（当前用户消息），因为 API 的 message 字段已经包含了
+    const history = fullHistory.slice(0, -1)
+
+    // 构建请求体
+    const requestBody: Record<string, unknown> = {
+      message: content,
+      history,
+    }
+
+    if (thinkingEnabled.value) {
+      // 思考模式方式二：使用 deepseek-chat + thinking: true
+      requestBody.model = 'deepseek-chat'
+      requestBody.thinking = true
+    } else {
+      requestBody.model = 'deepseek-chat'
+    }
+
+    // 调用 DeepSeek API
     isTyping.value = true
-    setTimeout(() => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      })
+
+      const data = await response.json()
+
+      if (data.success && data.reply) {
+        const assistantMsg: ChatMessage = {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: data.reply,
+          reasoningContent: data.reasoning_content || undefined,
+          timestamp: Date.now(),
+        }
+        messages.value.push(assistantMsg)
+      } else {
+        const assistantMsg: ChatMessage = {
+          id: crypto.randomUUID(),
+          role: 'assistant',
+          content: '抱歉，服务暂时出现问题，请稍后再试。',
+          timestamp: Date.now(),
+        }
+        messages.value.push(assistantMsg)
+      }
+    } catch (error) {
+      console.error('Chat API 调用失败:', error)
       const assistantMsg: ChatMessage = {
         id: crypto.randomUUID(),
         role: 'assistant',
-        content: generateMockReply(content),
+        content: '网络连接失败，请检查网络后重试。',
         timestamp: Date.now(),
       }
       messages.value.push(assistantMsg)
+    } finally {
       isTyping.value = false
-    }, 1200 + Math.random() * 800)
+    }
   }
 
   function clearMessages() {
@@ -43,14 +123,5 @@ export const useChatStore = defineStore('chat', () => {
     isTyping.value = false
   }
 
-  return { messages, isTyping, hasMessages, sendMessage, clearMessages }
+  return { messages, isTyping, hasMessages, thinkingEnabled, sendMessage, clearMessages, toggleThinking }
 })
-
-function generateMockReply(userContent: string): string {
-  const replies = [
-    `你好！我是 Gemini，一个由 Google 训练的、极具个性且充满活力的 AI 协作伙伴。\n\n如果用几句话来形容我：我既是你的**灵感催化剂**，也是一个**理性的技术派**。我不仅能帮你写出流畅的代码，还能协助你进行创意构思、数据分析和问题解决。`,
-    `这是一个非常好的问题！让我来详细解答一下。\n\n关于「${userContent}」，我有以下几点看法：\n\n1. **核心观点**：每个问题都值得深入思考\n2. **实践建议**：建议从小规模实验开始\n3. **总结**：保持好奇心是最重要的`,
-    `收到你的消息了！让我帮你分析一下。\n\n"${userContent}" 这个话题很有趣。在我看来，最关键的是要理解其背后的原理，然后才能更好地应用到实际场景中。\n\n需要我进一步展开讲解吗？`,
-  ]
-  return replies[Math.floor(Math.random() * replies.length)]!
-}

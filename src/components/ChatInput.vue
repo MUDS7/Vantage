@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { Plus, Send, X, FileText, Image, Film, Music, Archive, File } from 'lucide-vue-next'
+import { Plus, Send, X, FileText, Image, Film, Music, Archive, File, Brain } from 'lucide-vue-next'
 import { useChatStore } from '../stores/chat'
 
 const chatStore = useChatStore()
@@ -20,11 +20,11 @@ const uploadedFiles = ref<UploadFile[]>([])
 
 const hasFiles = computed(() => uploadedFiles.value.length > 0)
 
-function handleSend() {
+async function handleSend() {
   const text = inputText.value.trim()
   if (!text) return
-  chatStore.sendMessage(text)
   inputText.value = ''
+  await chatStore.sendMessage(text)
 }
 
 function handleKeydown(e: KeyboardEvent) {
@@ -148,9 +148,21 @@ function removeFile(id: string) {
 
       <!-- Toolbar -->
       <div id="toolbar" class="toolbar">
-        <button id="add-attachment-btn" class="toolbar-btn" aria-label="添加附件" @click="triggerFileInput">
-          <Plus :size="20" />
-        </button>
+        <div class="toolbar-left">
+          <button id="add-attachment-btn" class="toolbar-btn" aria-label="添加附件" @click="triggerFileInput">
+            <Plus :size="20" />
+          </button>
+          <button
+            id="thinking-toggle-btn"
+            class="toolbar-btn thinking-btn"
+            :class="{ 'thinking-btn--active': chatStore.thinkingEnabled }"
+            aria-label="思考模式"
+            :title="chatStore.thinkingEnabled ? '关闭思考模式' : '开启思考模式'"
+            @click="chatStore.toggleThinking()"
+          >
+            <Brain :size="18" class="thinking-brain-icon" />
+          </button>
+        </div>
         <button id="send-btn" class="send-btn" aria-label="发送" @click="handleSend">
           <Send :size="16" />
         </button>
@@ -332,6 +344,12 @@ function removeFile(id: string) {
   padding: var(--space-sm);
 }
 
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
 .toolbar-btn {
   display: flex;
   align-items: center;
@@ -345,6 +363,76 @@ function removeFile(id: string) {
 
 .toolbar-btn:hover {
   background: var(--input-btn-bg);
+}
+
+/* 思考模式按钮 */
+.thinking-btn {
+  position: relative;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease;
+}
+
+.thinking-brain-icon {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), filter 0.3s ease;
+}
+
+.thinking-btn:hover {
+  color: #7c3aed;
+  background: rgba(139, 92, 246, 0.1);
+  transform: translateY(-1px) scale(1.08);
+  box-shadow: 0 3px 10px rgba(139, 92, 246, 0.15);
+}
+
+.thinking-btn:hover .thinking-brain-icon {
+  transform: rotate(-8deg) scale(1.1);
+  filter: drop-shadow(0 0 3px rgba(139, 92, 246, 0.4));
+}
+
+.thinking-btn:active {
+  transform: scale(0.95);
+}
+
+/* 激活态 */
+.thinking-btn--active {
+  color: #7c3aed;
+  background: rgba(139, 92, 246, 0.1);
+  animation: thinkingPulse 2.5s ease-in-out infinite;
+}
+
+.thinking-btn--active .thinking-brain-icon {
+  animation: brainGlow 2.5s ease-in-out infinite;
+}
+
+.thinking-btn--active:hover {
+  background: rgba(139, 92, 246, 0.18);
+  transform: translateY(-1px) scale(1.08);
+  animation: none;
+  box-shadow: 0 3px 12px rgba(139, 92, 246, 0.25);
+}
+
+.thinking-btn--active:hover .thinking-brain-icon {
+  animation: none;
+  transform: rotate(-8deg) scale(1.1);
+  filter: drop-shadow(0 0 5px rgba(139, 92, 246, 0.5));
+}
+
+@keyframes thinkingPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(139, 92, 246, 0);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.1);
+  }
+}
+
+@keyframes brainGlow {
+  0%, 100% {
+    filter: drop-shadow(0 0 1px rgba(139, 92, 246, 0.2));
+    transform: scale(1);
+  }
+  50% {
+    filter: drop-shadow(0 0 4px rgba(139, 92, 246, 0.45));
+    transform: scale(1.06);
+  }
 }
 
 .send-btn {

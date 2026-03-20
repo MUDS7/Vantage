@@ -1,10 +1,17 @@
 <script setup lang="ts">
-import { ref, nextTick, watch } from 'vue'
-import { Sparkles, ThumbsUp, ThumbsDown, RefreshCw, Copy, MoreVertical } from 'lucide-vue-next'
+import { ref, reactive, nextTick, watch } from 'vue'
+import { Sparkles, ThumbsUp, ThumbsDown, RefreshCw, Copy, MoreVertical, Brain, ChevronDown } from 'lucide-vue-next'
 import { useChatStore } from '../stores/chat'
 
 const chatStore = useChatStore()
 const scrollContainer = ref<HTMLElement | null>(null)
+
+// 追踪每条思维链消息的折叠状态
+const reasoningExpanded = reactive<Record<string, boolean>>({})
+
+function toggleReasoning(msgId: string) {
+  reasoningExpanded[msgId] = !reasoningExpanded[msgId]
+}
 
 // 自动滚动到底部
 function scrollToBottom() {
@@ -54,6 +61,28 @@ watch(
             <Sparkles :size="16" />
           </div>
           <div class="assistant-content">
+            <!-- 思维链折叠面板 -->
+            <div v-if="msg.reasoningContent" class="reasoning-panel">
+              <button
+                :id="'reasoning-toggle-' + msg.id"
+                class="reasoning-toggle"
+                @click="toggleReasoning(msg.id)"
+              >
+                <Brain :size="14" class="reasoning-icon" />
+                <span class="reasoning-label">思考过程</span>
+                <ChevronDown
+                  :size="14"
+                  class="reasoning-chevron"
+                  :class="{ 'reasoning-chevron--open': reasoningExpanded[msg.id] }"
+                />
+              </button>
+              <div
+                class="reasoning-content"
+                :class="{ 'reasoning-content--open': reasoningExpanded[msg.id] }"
+              >
+                <div class="reasoning-text" v-html="formatMarkdown(msg.reasoningContent)"></div>
+              </div>
+            </div>
             <div class="assistant-text" v-html="formatMarkdown(msg.content)"></div>
             <div class="assistant-actions">
               <button class="action-btn" aria-label="点赞">
@@ -202,6 +231,81 @@ export default {}
   background: rgba(0, 0, 0, 0.06);
   border-radius: 4px;
   font-size: 0.875em;
+  font-family: 'Fira Code', 'Menlo', monospace;
+}
+
+/* 思维链面板 */
+.reasoning-panel {
+  margin-bottom: 10px;
+}
+
+.reasoning-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.08), rgba(59, 130, 246, 0.08));
+  border: 1px solid rgba(139, 92, 246, 0.15);
+  color: #7c3aed;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.reasoning-toggle:hover {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.14), rgba(59, 130, 246, 0.14));
+  border-color: rgba(139, 92, 246, 0.25);
+}
+
+.reasoning-icon {
+  flex-shrink: 0;
+}
+
+.reasoning-chevron {
+  flex-shrink: 0;
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.reasoning-chevron--open {
+  transform: rotate(180deg);
+}
+
+.reasoning-content {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease;
+  opacity: 0;
+}
+
+.reasoning-content--open {
+  max-height: 2000px;
+  opacity: 1;
+}
+
+.reasoning-text {
+  margin-top: 8px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.04), rgba(59, 130, 246, 0.04));
+  border-left: 3px solid rgba(139, 92, 246, 0.3);
+  border-radius: 0 8px 8px 0;
+  font-size: 0.8125rem;
+  line-height: 1.7;
+  color: var(--color-text-secondary);
+  word-break: break-word;
+}
+
+.reasoning-text :deep(strong) {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.reasoning-text :deep(code) {
+  padding: 1px 5px;
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 3px;
+  font-size: 0.85em;
   font-family: 'Fira Code', 'Menlo', monospace;
 }
 
