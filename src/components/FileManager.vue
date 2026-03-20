@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import FilePreview from './FilePreview.vue'
 import { API_BASE_URL } from '@/config'
+import { useViewStore } from '@/stores/view'
 import {
   FolderPlus,
   Upload,
@@ -122,6 +123,9 @@ function handleGlobalClick() {
   }
 }
 
+const viewStore = useViewStore()
+const previewPageNumber = ref<number | undefined>(undefined)
+
 onMounted(() => {
   document.addEventListener('click', handleGlobalClick)
   fetchFolders()
@@ -130,6 +134,44 @@ onMounted(() => {
 onUnmounted(() => {
   document.removeEventListener('click', handleGlobalClick)
 })
+
+// 监听来自引用来源的文件预览请求
+watch(
+  () => viewStore.filePreviewRequest,
+  async (req) => {
+    if (!req) return
+
+    // 等待文件夹列表加载完成
+    if (folders.value.length === 0) {
+      await fetchFolders()
+    }
+
+    // 找到目标文件夹
+    const targetFolder = folders.value.find((f) => f.name === req.folderName)
+    if (!targetFolder) {
+      viewStore.clearFilePreviewRequest()
+      return
+    }
+
+    // 展开文件夹并加载文件列表
+    targetFolder.isExpanded = true
+    await fetchFolderFiles(targetFolder)
+
+    // 找到目标文件并选中
+    const targetFile = targetFolder.children.find(
+      (c) => c.type === 'file' && c.name === req.fileName
+    ) as FileItem | undefined
+
+    if (targetFile) {
+      previewPageNumber.value = req.pageNumber
+      selectedFile.value = { ...targetFile, folderName: req.folderName }
+      selectedFolderId.value = null
+    }
+
+    viewStore.clearFilePreviewRequest()
+  },
+  { immediate: true },
+)
 
 function getFileTypeFromName(filename: string): 'image' | 'document' | 'code' | 'other' {
   const ext = filename.split('.').pop()?.toLowerCase()
@@ -220,9 +262,30 @@ async function confirmDelete() {
     }
   } else {
     const folder = pendingDelete.value.parentFolder!
-    folder.children = folder.children.filter((c) => c.id !== pendingDelete.value!.id)
-    if (selectedFile.value?.id === pendingDelete.value.id) {
-      selectedFile.value = null
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/folders/files/delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          folder: folder.name,
+          file_name: pendingDelete.value.name
+        })
+      })
+      const data = await response.json()
+      if (response.ok && data.success) {
+        folder.children = folder.children.filter((c) => c.id !== pendingDelete.value!.id)
+        if (folder.fileCount !== undefined && folder.fileCount > 0) {
+          folder.fileCount -= 1
+        }
+        if (selectedFile.value?.id === pendingDelete.value.id) {
+          selectedFile.value = null
+        }
+      } else {
+        alert(data.message || '删除文件失败')
+      }
+    } catch (error) {
+      console.error('删除文件异常:', error)
+      alert('网络请求失败')
     }
   }
   cancelDelete()
@@ -524,7 +587,7 @@ function getFileTypeDescription(fileType?: string): string {
 
         <!-- Preview Content -->
         <div id="preview-content" class="preview-content">
-          <FilePreview :folder-name="selectedFile.folderName" :file-name="selectedFile.name" />
+          <FilePreview :folder-name="selectedFile.folderName" :file-name="selectedFile.name" :page-number="previewPageNumber" />
         </div>
       </template>
 
