@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
 import { FileText, AlertCircle, Loader2 } from 'lucide-vue-next'
+import { API_BASE_URL } from '@/config'
 
 const props = defineProps<{
-  file: File | null
+  folderName: string
   fileName: string
 }>()
 
@@ -615,39 +616,92 @@ function cleanup() {
   error.value = null
 }
 
-async function loadPreview(file: File | null, fileName: string) {
+/**
+ * 将 base64 字符串解码为 ArrayBuffer
+ */
+function base64ToArrayBuffer(base64: string): ArrayBuffer {
+  const binaryString = atob(base64)
+  const len = binaryString.length
+  const bytes = new Uint8Array(len)
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i)
+  }
+  return bytes.buffer
+}
+
+/**
+ * 将 base64 字符串解码为文本（UTF-8）
+ */
+function base64ToText(base64: string): string {
+  const bytes = new Uint8Array(base64ToArrayBuffer(base64))
+  return new TextDecoder('utf-8').decode(bytes)
+}
+
+async function loadPreview(folderName: string, fileName: string) {
   cleanup()
-  if (!file) return
+  if (!folderName || !fileName) return
 
   loading.value = true
   error.value = null
 
   try {
+    // 1. 通过 API 获取文件 base64 内容
+    const response = await fetch(`${API_BASE_URL}/api/folders/files/content`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folder: folderName, file_name: fileName })
+    })
+
+    if (!response.ok) {
+      if (response.status === 400) {
+        error.value = '请求参数为空'
+      } else if (response.status === 404) {
+        error.value = '文件不存在或读取失败'
+      } else {
+        error.value = `获取文件内容失败 (${response.status})`
+      }
+      return
+    }
+
+    const data = await response.json()
+    if (!data.success || !data.content_base64) {
+      error.value = '获取文件内容失败：返回数据异常'
+      return
+    }
+
+    const contentBase64: string = data.content_base64
     const type = getPreviewType(fileName)
 
     switch (type) {
       case 'image': {
-        const url = URL.createObjectURL(file)
-        currentObjectUrl = url
-        imageUrl.value = url
+        // 图片直接用 base64 data URL 显示
+        const ext = getFileExtension(fileName)
+        const mimeMap: Record<string, string> = {
+          png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg',
+          gif: 'image/gif', svg: 'image/svg+xml', webp: 'image/webp',
+          bmp: 'image/bmp', img: 'image/png',
+        }
+        const mime = mimeMap[ext] || 'image/png'
+        imageUrl.value = `data:${mime};base64,${contentBase64}`
         break
       }
 
       case 'pdf': {
-        const url = URL.createObjectURL(file)
-        currentObjectUrl = url
-        pdfUrl.value = url
+        // PDF：将 base64 还原为 Blob 再创建 Object URL
+        const arrayBuffer = base64ToArrayBuffer(contentBase64)
+        const blob = new Blob([arrayBuffer], { type: 'application/pdf' })
+        const blobUrl = URL.createObjectURL(blob)
+        currentObjectUrl = blobUrl
+        pdfUrl.value = blobUrl
         break
       }
 
       case 'word': {
-        const arrayBuffer = await file.arrayBuffer()
-        // 通过文件头魔数检测真实格式，而不是依赖扩展名
+        const arrayBuffer = base64ToArrayBuffer(contentBase64)
         const header = new Uint8Array(arrayBuffer.slice(0, 4))
-        const isZip = header[0] === 0x50 && header[1] === 0x4B // PK = ZIP = docx
-        
+        const isZip = header[0] === 0x50 && header[1] === 0x4B
+
         if (isZip) {
-          // docx 格式：使用 docx-preview 保留完整样式
           try {
             isDocxPreview.value = true
             loading.value = false
@@ -666,13 +720,11 @@ async function loadPreview(file: File | null, fileName: string) {
                 trimXmlDeclaration: true,
                 useBase64URL: true,
               })
-              // 渲染后检查内容是否为空
               if (docxContainer.value && docxContainer.value.textContent?.trim() === '') {
                 throw new Error('渲染结果为空')
               }
             }
           } catch {
-            // docx-preview 失败，fallback 到 mammoth
             console.warn('docx-preview 渲染失败，尝试 mammoth 兜底')
             isDocxPreview.value = false
             if (docxContainer.value) {
@@ -683,8 +735,6 @@ async function loadPreview(file: File | null, fileName: string) {
             htmlContent.value = result.value
           }
         } else {
-          // doc (OLE2) 二进制格式：从二进制中提取文本内容
-          // mammoth 和 docx-preview 都不支持旧版 .doc，手动提取文本
           const text = extractTextFromDoc(arrayBuffer)
           if (text.trim()) {
             textContent.value = text
@@ -697,16 +747,16 @@ async function loadPreview(file: File | null, fileName: string) {
 
       case 'excel': {
         const XLSX = await import('xlsx')
-        const arrayBuffer = await file.arrayBuffer()
+        const arrayBuffer = base64ToArrayBuffer(contentBase64)
         const workbook = XLSX.read(arrayBuffer, { type: 'array' })
-        
+
         const sheets = []
         for (const sheetName of workbook.SheetNames) {
           const sheet = workbook.Sheets[sheetName]
           const jsonData = XLSX.utils.sheet_to_json<string[]>(sheet!, { header: 1 })
           let headers: string[] = []
           let rows: string[][] = []
-          
+
           if (jsonData.length > 0) {
             let maxCols = 0
             for (const row of jsonData) {
@@ -726,7 +776,7 @@ async function loadPreview(file: File | null, fileName: string) {
           }
           sheets.push({ name: sheetName, data: { headers, rows } })
         }
-        
+
         excelSheets.value = sheets
         activeSheetIndex.value = 0
         if (sheets.length > 0) {
@@ -738,7 +788,7 @@ async function loadPreview(file: File | null, fileName: string) {
       }
 
       case 'csv': {
-        const text = await file.text()
+        const text = base64ToText(contentBase64)
         const lines = text.split('\n').filter((l) => l.trim())
         const firstLine = lines[0]
         if (firstLine) {
@@ -753,14 +803,14 @@ async function loadPreview(file: File | null, fileName: string) {
 
       case 'markdown': {
         const { marked } = await import('marked')
-        const text = await file.text()
+        const text = base64ToText(contentBase64)
         const result = await marked(text)
         htmlContent.value = result
         break
       }
 
       case 'text': {
-        textContent.value = await file.text()
+        textContent.value = base64ToText(contentBase64)
         break
       }
 
@@ -776,9 +826,9 @@ async function loadPreview(file: File | null, fileName: string) {
 }
 
 watch(
-  () => [props.file, props.fileName],
-  async ([file, name]) => {
-    await loadPreview(file as File | null, name as string)
+  () => [props.folderName, props.fileName],
+  async ([folder, name]) => {
+    await loadPreview(folder as string, name as string)
     await nextTick()
     initColumnWidths()
   },

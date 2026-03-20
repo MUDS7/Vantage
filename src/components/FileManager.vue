@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import FilePreview from './FilePreview.vue'
 import { API_BASE_URL } from '@/config'
 import {
@@ -25,7 +25,6 @@ interface FileItem {
   name: string
   type: 'file'
   fileType?: 'image' | 'document' | 'code' | 'other'
-  rawFile?: File
 }
 
 interface FolderItem {
@@ -39,7 +38,6 @@ interface FolderItem {
 
 interface SelectedFile extends FileItem {
   folderName: string
-  rawFile?: File
 }
 
 // Initial data
@@ -63,6 +61,35 @@ const fetchFolders = async () => {
     }
   } catch (error) {
     console.error('获取文件夹列表异常:', error)
+  }
+}
+
+const fetchFolderFiles = async (folder: FolderItem) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/folders/files`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folder: folder.name })
+    })
+    if (response.ok) {
+      const data = await response.json()
+      folder.children = data.map((item: any) => ({
+        id: item.file_id || ('file-' + item.file_name + '-' + Date.now()),
+        name: item.file_name,
+        type: 'file' as const,
+        fileType: getFileTypeFromName(item.file_name),
+      }))
+      folder.fileCount = data.length
+    } else if (response.status === 400) {
+      showError('文件夹参数为空')
+    } else if (response.status === 404) {
+      showError(`文件夹「${folder.name}」不存在`)
+    } else {
+      showError('查询文件列表失败')
+    }
+  } catch (error) {
+    console.error('获取文件夹文件列表异常:', error)
+    showError('获取文件列表时网络请求失败')
   }
 }
 
@@ -114,12 +141,16 @@ function getFileTypeFromName(filename: string): 'image' | 'document' | 'code' | 
 
 function toggleFolder(folder: FolderItem) {
   folder.isExpanded = !folder.isExpanded
+  if (folder.isExpanded) {
+    fetchFolderFiles(folder)
+  }
 }
 
 function selectFolder(folder: FolderItem) {
   selectedFolderId.value = folder.id
   selectedFile.value = null
   folder.isExpanded = true
+  fetchFolderFiles(folder)
 }
 
 function selectFile(file: FileItem, folderName: string) {
@@ -246,27 +277,64 @@ function cancelRename() {
   renamingId.value = null
 }
 
+// 错误提示弹窗状态
+const isErrorDialogOpen = ref(false)
+const errorMessage = ref('')
+
+function showError(msg: string) {
+  errorMessage.value = msg
+  isErrorDialogOpen.value = true
+}
+
 function handleUploadFile() {
   const input = document.createElement('input')
   input.type = 'file'
   input.multiple = true
   input.accept = '.doc,.docx,.xls,.xlsx,.csv,.pdf,.png,.jpg,.jpeg,.gif,.svg,.webp,.img,.md,.txt'
-  input.onchange = (e) => {
+  input.onchange = async (e) => {
     const files = (e.target as HTMLInputElement).files
-    if (files && files.length > 0 && folders.value.length > 0) {
-      const newFiles: FileItem[] = Array.from(files).map((file, index) => ({
-        id: `upload-${Date.now()}-${index}`,
-        name: file.name,
-        type: 'file' as const,
-        fileType: getFileTypeFromName(file.name),
-        rawFile: file,
-      }))
+    if (files && files.length > 0) {
+      if (folders.value.length === 0) {
+        showError('请先创建文件夹再上传文件')
+        return
+      }
+
       // 优先放到选中的文件夹，否则放到第一个文件夹
       const targetFolder = selectedFolderId.value
         ? folders.value.find((f) => f.id === selectedFolderId.value)
         : folders.value[0]
+
       if (targetFolder) {
-        targetFolder.children.push(...newFiles)
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+          if (!file) continue;
+          
+          const formData = new FormData();
+          formData.append('file', file);
+          formData.append('folder', targetFolder.name);
+
+          try {
+            const response = await fetch(`${API_BASE_URL}/api/upload`, {
+              method: 'POST',
+              body: formData
+            });
+            const data = await response.json();
+            if (response.ok && data.success) {
+              await fetchFolders();
+              // 刷新目标文件夹的文件列表
+              const updatedFolder = folders.value.find(f => f.name === targetFolder.name)
+              if (updatedFolder) {
+                await fetchFolderFiles(updatedFolder)
+                updatedFolder.isExpanded = true
+              }
+            } else {
+              showError(`文件 '${file.name}' 上传失败:\n${data.message || '未知错误'}`);
+            }
+          } catch (error) {
+            console.error('上传文件异常:', error);
+            showError(`文件 '${file.name}' 上传时网络请求失败`);
+          }
+        }
         targetFolder.isExpanded = true
       }
     }
@@ -456,28 +524,7 @@ function getFileTypeDescription(fileType?: string): string {
 
         <!-- Preview Content -->
         <div id="preview-content" class="preview-content">
-          <template v-if="selectedFile.rawFile">
-            <FilePreview :file="selectedFile.rawFile" :file-name="selectedFile.name" />
-          </template>
-          <template v-else>
-            <div id="preview-content-inner" class="preview-content-inner">
-              <component
-                :is="selectedFile.fileType === 'image' ? Image :
-                     selectedFile.fileType === 'document' ? FileText :
-                     selectedFile.fileType === 'code' ? FileCode : File"
-                :size="64"
-                :class="['preview-file-icon',
-                  selectedFile.fileType === 'image' ? 'icon-green' :
-                  selectedFile.fileType === 'document' ? 'icon-blue' :
-                  selectedFile.fileType === 'code' ? 'icon-purple' : 'icon-gray']"
-              />
-              <p class="preview-filename-large">{{ selectedFile.name }}</p>
-              <p class="preview-filetype-label">{{ getFileTypeLabel(selectedFile.fileType) }}</p>
-              <div id="preview-info-card" class="preview-info-card">
-                <p class="preview-info-text">{{ getFileTypeDescription(selectedFile.fileType) }}</p>
-              </div>
-            </div>
-          </template>
+          <FilePreview :folder-name="selectedFile.folderName" :file-name="selectedFile.name" />
         </div>
       </template>
 
@@ -534,6 +581,21 @@ function getFileTypeDescription(fileType?: string): string {
           <div id="delete-dialog-footer" class="dialog-footer">
             <button class="fm-btn secondary" @click="cancelDelete">取消</button>
             <button class="fm-btn danger" @click="confirmDelete">删除</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Error Dialog -->
+    <Teleport to="body">
+      <div v-if="isErrorDialogOpen" id="error-dialog-overlay" class="dialog-overlay">
+        <div id="error-dialog-content" class="dialog-content">
+          <div id="error-dialog-header" class="dialog-header">
+            <h3 class="dialog-title delete-title">错误提示</h3>
+            <p class="dialog-description" style="white-space: pre-wrap;">{{ errorMessage }}</p>
+          </div>
+          <div id="error-dialog-footer" class="dialog-footer">
+            <button class="fm-btn primary" @click="isErrorDialogOpen = false">确定</button>
           </div>
         </div>
       </div>
