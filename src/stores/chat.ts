@@ -9,12 +9,22 @@ export interface MessageFile {
   file?: File     // 原始 File 对象（用于重新发送）
 }
 
+export interface ReferenceInfo {
+  file_name: string       // 纯文件名
+  file_path: string       // 完整路径
+  page_number: number     // 页码
+  chunk_index: number     // 切片序号
+  distance: number        // 向量距离（越小越相关）
+  snippet: string         // 命中的文本片段（前200字）
+}
+
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
   content: string
-  reasoningContent?: string // 思维链内容（仅 assistant 消息可能有）
-  files?: MessageFile[]     // 用户消息附带的文件
+  reasoningContent?: string   // 思维链内容（仅 assistant 消息可能有）
+  references?: ReferenceInfo[] // 文档引用来源（仅 RAG 模式的 assistant 消息可能有）
+  files?: MessageFile[]       // 用户消息附带的文件
   timestamp: number
 }
 
@@ -36,6 +46,7 @@ export const useChatStore = defineStore('chat', () => {
   const messages = ref<ChatMessage[]>([])
   const isTyping = ref(false)
   const thinkingEnabled = ref(false) // 是否开启思考模式
+  const docSearchEnabled = ref(true) // 是否开启文档优先检索（默认开启）
   const sessionId = ref<string | null>(null) // 当前会话 ID
   const sessions = ref<ChatSession[]>([]) // 会话列表
   const sessionsLoading = ref(false) // 会话列表加载状态
@@ -64,6 +75,10 @@ export const useChatStore = defineStore('chat', () => {
     thinkingEnabled.value = !thinkingEnabled.value
   }
 
+  function toggleDocSearch() {
+    docSearchEnabled.value = !docSearchEnabled.value
+  }
+
   async function sendMessage(content: string, files?: File[]) {
     // 构建文件元信息
     const messageFiles: MessageFile[] | undefined = files?.map((f) => ({
@@ -88,36 +103,59 @@ export const useChatStore = defineStore('chat', () => {
     // 移除最后一条（当前用户消息），因为 API 的 message 字段已经包含了
     const history = fullHistory.slice(0, -1)
 
-    // 使用 FormData 构建请求体（支持文件上传）
-    const formData = new FormData()
-    formData.append('message', content)
-    formData.append('history', JSON.stringify(history))
-
-    if (sessionId.value) {
-      formData.append('session_id', sessionId.value)
-    }
-
-    if (thinkingEnabled.value) {
-      formData.append('model', 'deepseek-chat')
-      formData.append('thinking', 'true')
-    } else {
-      formData.append('model', 'deepseek-chat')
-    }
-
-    // 添加上传的文件
-    if (files && files.length > 0) {
-      for (const file of files) {
-        formData.append('files', file)
-      }
-    }
-
-    // 调用 DeepSeek API
+    // 调用 API
     isTyping.value = true
     try {
-      const response = await fetch(`${API_BASE_URL}/api/chat`, {
-        method: 'POST',
-        body: formData,
-      })
+      let response: Response
+
+      if (docSearchEnabled.value) {
+        // 文档优先检索模式 —— 使用 /api/chat/rag（JSON）
+        const ragBody: Record<string, unknown> = {
+          message: content,
+          history,
+          model: 'deepseek-chat',
+          top_k: 5,
+        }
+        if (sessionId.value) {
+          ragBody.session_id = sessionId.value
+        }
+        if (thinkingEnabled.value) {
+          ragBody.thinking = true
+        }
+        response = await fetch(`${API_BASE_URL}/api/chat/rag`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(ragBody),
+        })
+      } else {
+        // 普通对话模式 —— 使用 /api/chat（FormData）
+        const formData = new FormData()
+        formData.append('message', content)
+        formData.append('history', JSON.stringify(history))
+
+        if (sessionId.value) {
+          formData.append('session_id', sessionId.value)
+        }
+
+        if (thinkingEnabled.value) {
+          formData.append('model', 'deepseek-chat')
+          formData.append('thinking', 'true')
+        } else {
+          formData.append('model', 'deepseek-chat')
+        }
+
+        // 添加上传的文件
+        if (files && files.length > 0) {
+          for (const file of files) {
+            formData.append('files', file)
+          }
+        }
+
+        response = await fetch(`${API_BASE_URL}/api/chat`, {
+          method: 'POST',
+          body: formData,
+        })
+      }
 
       const data = await response.json()
 
@@ -127,6 +165,7 @@ export const useChatStore = defineStore('chat', () => {
           role: 'assistant',
           content: data.reply,
           reasoningContent: data.reasoning_content || undefined,
+          references: data.references && data.references.length > 0 ? data.references : undefined,
           timestamp: Date.now(),
         }
         messages.value.push(assistantMsg)
@@ -219,10 +258,12 @@ export const useChatStore = defineStore('chat', () => {
         sessionId.value = data.session.session_id
         // 将后端返回的 messages 转换为前端 ChatMessage 格式
         messages.value = data.session.messages.map(
-          (msg: { role: string; content: string }, index: number) => ({
+          (msg: { role: string; content: string; reasoning_content?: string; references?: ReferenceInfo[] }, index: number) => ({
             id: `${data.session.session_id}-${index}`,
             role: msg.role as 'user' | 'assistant',
             content: msg.content,
+            reasoningContent: msg.reasoning_content || undefined,
+            references: msg.references || undefined,
             timestamp: Date.now(),
           }),
         )
@@ -280,12 +321,14 @@ export const useChatStore = defineStore('chat', () => {
     isTyping,
     hasMessages,
     thinkingEnabled,
+    docSearchEnabled,
     sessionId,
     sessions,
     sessionsLoading,
     sendMessage,
     clearMessages,
     toggleThinking,
+    toggleDocSearch,
     fetchSessions,
     loadSession,
     deleteSession,

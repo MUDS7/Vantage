@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { Plus, Send, X, FileText, Image, Film, Music, Archive, File, Brain } from 'lucide-vue-next'
+import { Plus, Send, X, FileText, Image, Film, Music, Archive, File, Brain, BookOpen } from 'lucide-vue-next'
 import { useChatStore } from '../stores/chat'
 
 const chatStore = useChatStore()
@@ -174,6 +174,16 @@ function removeFile(id: string) {
             @click="chatStore.toggleThinking()"
           >
             <Brain :size="18" class="thinking-brain-icon" />
+          </button>
+          <button
+            id="doc-search-toggle-btn"
+            class="toolbar-btn doc-search-btn"
+            :class="{ 'doc-search-btn--active': chatStore.docSearchEnabled }"
+            aria-label="文档检索"
+            :title="chatStore.docSearchEnabled ? '关闭文档优先检索' : '开启文档优先检索'"
+            @click="chatStore.toggleDocSearch()"
+          >
+            <BookOpen :size="18" class="doc-search-icon" />
           </button>
         </div>
         <button id="send-btn" class="send-btn" aria-label="发送" @click="handleSend">
@@ -407,11 +417,14 @@ function removeFile(id: string) {
 /* 激活态 */
 .thinking-btn--active {
   color: #7c3aed;
-  background: rgba(139, 92, 246, 0.1);
+  background: rgba(139, 92, 246, 0.15);
+  border: 1.5px solid rgba(139, 92, 246, 0.4);
+  box-shadow: 0 0 8px rgba(139, 92, 246, 0.2);
   animation: thinkingPulse 2.5s ease-in-out infinite;
 }
 
 .thinking-btn--active .thinking-brain-icon {
+  filter: drop-shadow(0 0 3px rgba(139, 92, 246, 0.5));
   animation: brainGlow 2.5s ease-in-out infinite;
 }
 
@@ -444,6 +457,79 @@ function removeFile(id: string) {
   }
   50% {
     filter: drop-shadow(0 0 4px rgba(139, 92, 246, 0.45));
+    transform: scale(1.06);
+  }
+}
+
+/* 文档检索按钮 */
+.doc-search-btn {
+  position: relative;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease;
+}
+
+.doc-search-icon {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), filter 0.3s ease;
+}
+
+.doc-search-btn:hover {
+  color: #0d9488;
+  background: rgba(20, 184, 166, 0.1);
+  transform: translateY(-1px) scale(1.08);
+  box-shadow: 0 3px 10px rgba(20, 184, 166, 0.15);
+}
+
+.doc-search-btn:hover .doc-search-icon {
+  transform: rotate(-8deg) scale(1.1);
+  filter: drop-shadow(0 0 3px rgba(20, 184, 166, 0.4));
+}
+
+.doc-search-btn:active {
+  transform: scale(0.95);
+}
+
+/* 文档检索激活态 */
+.doc-search-btn--active {
+  color: #0d9488;
+  background: rgba(20, 184, 166, 0.15);
+  border: 1.5px solid rgba(20, 184, 166, 0.4);
+  box-shadow: 0 0 8px rgba(20, 184, 166, 0.2);
+  animation: docSearchPulse 2.5s ease-in-out infinite;
+}
+
+.doc-search-btn--active .doc-search-icon {
+  filter: drop-shadow(0 0 3px rgba(20, 184, 166, 0.5));
+  animation: docSearchGlow 2.5s ease-in-out infinite;
+}
+
+.doc-search-btn--active:hover {
+  background: rgba(20, 184, 166, 0.18);
+  transform: translateY(-1px) scale(1.08);
+  animation: none;
+  box-shadow: 0 3px 12px rgba(20, 184, 166, 0.25);
+}
+
+.doc-search-btn--active:hover .doc-search-icon {
+  animation: none;
+  transform: rotate(-8deg) scale(1.1);
+  filter: drop-shadow(0 0 5px rgba(20, 184, 166, 0.5));
+}
+
+@keyframes docSearchPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(20, 184, 166, 0);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(20, 184, 166, 0.1);
+  }
+}
+
+@keyframes docSearchGlow {
+  0%, 100% {
+    filter: drop-shadow(0 0 1px rgba(20, 184, 166, 0.2));
+    transform: scale(1);
+  }
+  50% {
+    filter: drop-shadow(0 0 4px rgba(20, 184, 166, 0.45));
     transform: scale(1.06);
   }
 }

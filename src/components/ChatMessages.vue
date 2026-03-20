@@ -164,6 +164,26 @@ function resendMessage(msgId: string) {
               </div>
             </div>
             <div class="assistant-text markdown-body" v-html="renderMarkdown(msg.content)"></div>
+            <!-- 引用来源 -->
+            <div v-if="msg.references && msg.references.length > 0" class="references-section">
+              <div class="references-label">参考来源</div>
+              <div class="references-list">
+                <div
+                  v-for="(ref, rIdx) in msg.references"
+                  :key="rIdx"
+                  :id="'ref-' + msg.id + '-' + rIdx"
+                  class="reference-item"
+                >
+                  <div class="reference-header">
+                    <FileText :size="13" class="reference-file-icon" />
+                    <span class="reference-file-name">{{ ref.file_name }}</span>
+                    <span v-if="ref.page_number > 0" class="reference-page">第{{ ref.page_number }}页</span>
+                    <span class="reference-chunk">#{{ ref.chunk_index }}</span>
+                  </div>
+                  <div v-if="ref.snippet" class="reference-snippet">{{ ref.snippet }}</div>
+                </div>
+              </div>
+            </div>
             <div class="assistant-actions">
               <button class="action-btn" aria-label="点赞">
                 <ThumbsUp :size="16" />
@@ -651,6 +671,83 @@ function resendMessage(msgId: string) {
 }
 
 
+
+/* 引用来源区域 */
+.references-section {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.references-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--color-text-muted, #9ca3af);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 6px;
+}
+
+.references-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.reference-item {
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.025);
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.reference-item:hover {
+  background: rgba(0, 0, 0, 0.045);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+.reference-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.reference-file-icon {
+  color: var(--color-text-muted, #9ca3af);
+  flex-shrink: 0;
+}
+
+.reference-file-name {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-text-secondary, #6b7280);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+.reference-page,
+.reference-chunk {
+  font-size: 0.6875rem;
+  color: var(--color-text-muted, #9ca3af);
+  white-space: nowrap;
+}
+
+.reference-snippet {
+  margin-top: 4px;
+  font-size: 0.6875rem;
+  line-height: 1.5;
+  color: var(--color-text-muted, #9ca3af);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-all;
+}
 
 /* 操作按钮 */
 .assistant-actions {
