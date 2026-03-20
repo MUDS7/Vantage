@@ -127,17 +127,29 @@ function selectFile(file: FileItem, folderName: string) {
   selectedFolderId.value = null
 }
 
-function createFolder() {
-  if (newFolderName.value.trim()) {
-    folders.value.push({
-      id: Date.now().toString(),
-      name: newFolderName.value.trim(),
-      type: 'folder',
-      isExpanded: false,
-      children: [],
-    })
-    newFolderName.value = ''
-    isCreateDialogOpen.value = false
+async function createFolder() {
+  const name = newFolderName.value.trim()
+  if (name) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/folders`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ name })
+      })
+      const data = await response.json()
+      if (response.ok && data.success) {
+        newFolderName.value = ''
+        isCreateDialogOpen.value = false
+        await fetchFolders()
+      } else {
+        alert(data.message || '创建文件夹失败')
+      }
+    } catch (error) {
+      console.error('创建文件夹异常:', error)
+      alert('网络请求失败')
+    }
   }
 }
 
@@ -153,13 +165,28 @@ function requestDeleteFile(item: FileItem | FolderItem, folder: FolderItem) {
   closeMenu()
 }
 
-function confirmDelete() {
+async function confirmDelete() {
   if (!pendingDelete.value) return
   if (pendingDelete.value.type === 'folder') {
-    if (selectedFolderId.value === pendingDelete.value.id) {
-      selectedFolderId.value = null
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/folders/delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: pendingDelete.value.name })
+      })
+      const data = await response.json()
+      if (response.ok && data.success) {
+        if (selectedFolderId.value === pendingDelete.value.id) {
+          selectedFolderId.value = null
+        }
+        await fetchFolders()
+      } else {
+        alert(data.message || '删除文件夹失败')
+      }
+    } catch (error) {
+      console.error('删除文件夹异常:', error)
+      alert('网络请求失败')
     }
-    folders.value = folders.value.filter((f) => f.id !== pendingDelete.value!.id)
   } else {
     const folder = pendingDelete.value.parentFolder!
     folder.children = folder.children.filter((c) => c.id !== pendingDelete.value!.id)
@@ -181,12 +208,35 @@ function startRename(item: FolderItem | FileItem) {
   closeMenu()
 }
 
-function confirmRename(item: FolderItem | FileItem) {
-  if (renameValue.value.trim()) {
-    item.name = renameValue.value.trim()
+async function confirmRename(item: FolderItem | FileItem) {
+  const newName = renameValue.value.trim()
+  if (!newName) {
+    renamingId.value = null
+    return
+  }
+  if (item.type === 'folder') {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/folders/rename`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ old_name: item.name, new_name: newName })
+      })
+      const data = await response.json()
+      if (response.ok && data.success) {
+        item.name = newName
+        await fetchFolders()
+      } else {
+        alert(data.message || '重命名文件夹失败')
+      }
+    } catch (error) {
+      console.error('重命名文件夹异常:', error)
+      alert('网络请求失败')
+    }
+  } else {
+    item.name = newName
     // 如果正在预览该文件，同步更新名称
     if (selectedFile.value && selectedFile.value.id === item.id) {
-      selectedFile.value.name = item.name
+      selectedFile.value.name = newName
     }
   }
   renamingId.value = null
