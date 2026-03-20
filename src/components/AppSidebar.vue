@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import {
   Menu,
   Search,
@@ -7,14 +7,49 @@ import {
   Home,
   Settings,
   Scan,
+  Trash2,
 } from 'lucide-vue-next'
 import { useSidebarStore } from '../stores/sidebar'
 import { useViewStore } from '../stores/view'
+import { useChatStore } from '../stores/chat'
 
 const sidebarStore = useSidebarStore()
 const viewStore = useViewStore()
+const chatStore = useChatStore()
 
-const conversations: string[] = []
+// 悬浮显示删除按钮的会话 ID
+const hoveredSessionId = ref<string | null>(null)
+
+// 组件挂载时加载会话列表
+onMounted(() => {
+  chatStore.fetchSessions()
+})
+
+/**
+ * 发起新对话
+ */
+function handleNewChat() {
+  chatStore.newChat()
+  viewStore.setView('chat')
+}
+
+/**
+ * 点击某个会话，加载其详情
+ */
+async function handleSelectSession(sessionId: string) {
+  viewStore.setView('chat')
+  await chatStore.loadSession(sessionId)
+}
+
+/**
+ * 删除某个会话
+ */
+async function handleDeleteSession(sessionId: string, event: Event) {
+  event.stopPropagation()
+  const confirmed = window.confirm('确定要删除这个会话吗？删除后无法恢复。')
+  if (!confirmed) return
+  await chatStore.deleteSession(sessionId)
+}
 </script>
 
 <template>
@@ -37,7 +72,7 @@ const conversations: string[] = []
     <!-- New Chat -->
     <div id="sidebar-new-chat-section" class="sidebar-section">
       <div id="new-chat-row" class="new-chat-row">
-        <button id="new-chat-btn" class="sidebar-btn" :class="{ active: viewStore.currentView === 'chat' }" @click="viewStore.setView('chat')">
+        <button id="new-chat-btn" class="sidebar-btn" :class="{ active: viewStore.currentView === 'chat' && !chatStore.sessionId }" @click="handleNewChat">
           <SquarePen :size="20" />
           <span id="new-chat-text">发起新对话</span>
         </button>
@@ -59,13 +94,41 @@ const conversations: string[] = []
     <div id="sidebar-conversations" class="sidebar-conversations">
       <div id="conversations-title" class="conversations-title">对话</div>
       <div id="conversations-list" class="conversations-list">
+        <!-- 加载状态 -->
+        <div v-if="chatStore.sessionsLoading && chatStore.sessions.length === 0" class="sessions-loading">
+          <span class="loading-dot"></span>
+          <span class="loading-dot"></span>
+          <span class="loading-dot"></span>
+        </div>
+
+        <!-- 会话列表 -->
         <button
-          v-for="(title, index) in conversations"
-          :key="index"
+          v-for="session in chatStore.sessions"
+          :key="session.session_id"
+          :id="'session-' + session.session_id"
           class="conversation-item"
+          :class="{ 'conversation-item--active': chatStore.sessionId === session.session_id }"
+          @click="handleSelectSession(session.session_id)"
+          @mouseenter="hoveredSessionId = session.session_id"
+          @mouseleave="hoveredSessionId = null"
         >
-          {{ title }}
+          <span class="conversation-item-title">{{ session.title || '新对话' }}</span>
+          <!-- 删除按钮（悬浮显示） -->
+          <button
+            v-if="hoveredSessionId === session.session_id"
+            :id="'session-delete-' + session.session_id"
+            class="session-delete-btn"
+            aria-label="删除会话"
+            @click="handleDeleteSession(session.session_id, $event)"
+          >
+            <Trash2 :size="14" />
+          </button>
         </button>
+
+        <!-- 无会话提示 -->
+        <div v-if="!chatStore.sessionsLoading && chatStore.sessions.length === 0" class="no-sessions">
+          暂无对话记录
+        </div>
       </div>
     </div>
 
@@ -243,6 +306,9 @@ const conversations: string[] = []
 }
 
 .conversation-item {
+  position: relative;
+  display: flex;
+  align-items: center;
   width: 100%;
   padding: var(--space-sm) var(--space-md);
   border-radius: var(--radius-full);
@@ -250,19 +316,103 @@ const conversations: string[] = []
   color: var(--color-text-secondary);
   text-align: left;
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
   transition: background var(--transition-fast);
+  cursor: pointer;
 }
 
 .conversation-item:hover {
   background: var(--color-hover);
 }
 
+.conversation-item--active {
+  background: var(--color-hover-strong);
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+.conversation-item-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 会话删除按钮 */
+.session-delete-btn {
+  position: absolute;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-full);
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+  animation: fadeInBtn 0.15s ease;
+}
+
+@keyframes fadeInBtn {
+  from { opacity: 0; transform: scale(0.8); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.session-delete-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+/* 加载状态 */
+.sessions-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: var(--space-lg) 0;
+}
+
+.loading-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-text-muted);
+  animation: dotBounce 1.4s ease-in-out infinite;
+}
+
+.loading-dot:nth-child(2) {
+  animation-delay: 0.16s;
+}
+
+.loading-dot:nth-child(3) {
+  animation-delay: 0.32s;
+}
+
+@keyframes dotBounce {
+  0%, 80%, 100% {
+    transform: scale(0.6);
+    opacity: 0.4;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* 无会话提示 */
+.no-sessions {
+  padding: var(--space-lg) var(--space-md);
+  text-align: center;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
 .sidebar-footer {
   border-top: 1px solid var(--sidebar-border);
   padding: var(--space-md);
 }
-
 
 </style>

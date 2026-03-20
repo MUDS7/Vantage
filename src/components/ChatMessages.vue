@@ -2,6 +2,21 @@
 import { ref, reactive, nextTick, watch } from 'vue'
 import { Sparkles, ThumbsUp, ThumbsDown, RefreshCw, Copy, MoreVertical, Brain, ChevronDown } from 'lucide-vue-next'
 import { useChatStore } from '../stores/chat'
+import { marked } from 'marked'
+
+// 配置 marked 选项
+marked.setOptions({
+  breaks: true,    // 支持 GFM 换行
+  gfm: true,       // 启用 GitHub Flavored Markdown
+})
+
+/**
+ * 使用 marked 渲染 Markdown 为 HTML
+ */
+function renderMarkdown(text: string): string {
+  if (!text) return ''
+  return marked.parse(text) as string
+}
 
 const chatStore = useChatStore()
 const scrollContainer = ref<HTMLElement | null>(null)
@@ -80,10 +95,10 @@ watch(
                 class="reasoning-content"
                 :class="{ 'reasoning-content--open': reasoningExpanded[msg.id] }"
               >
-                <div class="reasoning-text" v-html="formatMarkdown(msg.reasoningContent)"></div>
+                <div class="reasoning-text markdown-body" v-html="renderMarkdown(msg.reasoningContent)"></div>
               </div>
             </div>
-            <div class="assistant-text" v-html="formatMarkdown(msg.content)"></div>
+            <div class="assistant-text markdown-body" v-html="renderMarkdown(msg.content)"></div>
             <div class="assistant-actions">
               <button class="action-btn" aria-label="点赞">
                 <ThumbsUp :size="16" />
@@ -122,18 +137,7 @@ watch(
   </div>
 </template>
 
-<script lang="ts">
-// 简单的 Markdown 格式化
-function formatMarkdown(text: string): string {
-  return text
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    .replace(/`(.*?)`/g, '<code>$1</code>')
-    .replace(/\n/g, '<br>')
-}
 
-export default {}
-</script>
 
 <style scoped>
 .chat-messages-container {
@@ -221,17 +225,167 @@ export default {}
   word-break: break-word;
 }
 
-.assistant-text :deep(strong) {
+/* ===== Markdown 渲染样式（通用） ===== */
+.markdown-body :deep(h1),
+.markdown-body :deep(h2),
+.markdown-body :deep(h3),
+.markdown-body :deep(h4),
+.markdown-body :deep(h5),
+.markdown-body :deep(h6) {
+  margin-top: 1.2em;
+  margin-bottom: 0.6em;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--color-text-primary);
+}
+
+.markdown-body :deep(h1) { font-size: 1.5em; }
+.markdown-body :deep(h2) { font-size: 1.3em; }
+.markdown-body :deep(h3) { font-size: 1.15em; }
+.markdown-body :deep(h4) { font-size: 1.05em; }
+
+.markdown-body :deep(h1:first-child),
+.markdown-body :deep(h2:first-child),
+.markdown-body :deep(h3:first-child) {
+  margin-top: 0;
+}
+
+.markdown-body :deep(p) {
+  margin: 0.6em 0;
+  line-height: 1.75;
+}
+
+.markdown-body :deep(p:first-child) {
+  margin-top: 0;
+}
+
+.markdown-body :deep(p:last-child) {
+  margin-bottom: 0;
+}
+
+.markdown-body :deep(strong) {
   font-weight: 600;
   color: var(--color-text-primary);
 }
 
-.assistant-text :deep(code) {
+.markdown-body :deep(em) {
+  font-style: italic;
+}
+
+/* 行内代码 */
+.markdown-body :deep(code) {
   padding: 2px 6px;
   background: rgba(0, 0, 0, 0.06);
   border-radius: 4px;
-  font-size: 0.875em;
-  font-family: 'Fira Code', 'Menlo', monospace;
+  font-size: 0.85em;
+  font-family: 'Fira Code', 'Menlo', 'Consolas', monospace;
+}
+
+/* 代码块 */
+.markdown-body :deep(pre) {
+  margin: 0.8em 0;
+  padding: 16px;
+  background: #1e1e2e;
+  border-radius: 10px;
+  overflow-x: auto;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.markdown-body :deep(pre code) {
+  padding: 0;
+  background: none;
+  border-radius: 0;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: #cdd6f4;
+  font-family: 'Fira Code', 'Menlo', 'Consolas', monospace;
+}
+
+/* 表格 */
+.markdown-body :deep(table) {
+  width: 100%;
+  margin: 0.8em 0;
+  border-collapse: collapse;
+  border-radius: 8px;
+  overflow: hidden;
+  font-size: 0.875rem;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.markdown-body :deep(thead) {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.markdown-body :deep(th) {
+  padding: 10px 14px;
+  font-weight: 600;
+  text-align: left;
+  color: var(--color-text-primary);
+  border-bottom: 2px solid rgba(0, 0, 0, 0.1);
+}
+
+.markdown-body :deep(td) {
+  padding: 9px 14px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  color: var(--color-text-secondary);
+}
+
+.markdown-body :deep(tr:last-child td) {
+  border-bottom: none;
+}
+
+.markdown-body :deep(tbody tr:hover) {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+/* 列表 */
+.markdown-body :deep(ul),
+.markdown-body :deep(ol) {
+  margin: 0.5em 0;
+  padding-left: 1.8em;
+}
+
+.markdown-body :deep(li) {
+  margin: 0.3em 0;
+  line-height: 1.7;
+}
+
+.markdown-body :deep(li > ul),
+.markdown-body :deep(li > ol) {
+  margin: 0.2em 0;
+}
+
+/* 分割线 */
+.markdown-body :deep(hr) {
+  margin: 1.2em 0;
+  border: none;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+/* 引用块 */
+.markdown-body :deep(blockquote) {
+  margin: 0.8em 0;
+  padding: 8px 16px;
+  border-left: 3px solid rgba(59, 130, 246, 0.4);
+  background: rgba(59, 130, 246, 0.04);
+  border-radius: 0 6px 6px 0;
+  color: var(--color-text-secondary);
+}
+
+.markdown-body :deep(blockquote p) {
+  margin: 0.3em 0;
+}
+
+/* 链接 */
+.markdown-body :deep(a) {
+  color: #3b82f6;
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.2s ease;
+}
+
+.markdown-body :deep(a:hover) {
+  border-bottom-color: #3b82f6;
 }
 
 /* 思维链面板 */
@@ -296,18 +450,7 @@ export default {}
   word-break: break-word;
 }
 
-.reasoning-text :deep(strong) {
-  font-weight: 600;
-  color: var(--color-text-primary);
-}
 
-.reasoning-text :deep(code) {
-  padding: 1px 5px;
-  background: rgba(0, 0, 0, 0.06);
-  border-radius: 3px;
-  font-size: 0.85em;
-  font-family: 'Fira Code', 'Menlo', monospace;
-}
 
 /* 操作按钮 */
 .assistant-actions {

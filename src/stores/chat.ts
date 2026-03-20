@@ -15,10 +15,22 @@ interface ChatApiHistory {
   content: string
 }
 
+export interface ChatSession {
+  session_id: string
+  title: string
+  model: string
+  message_count: number
+  created_at: string
+  updated_at: string
+}
+
 export const useChatStore = defineStore('chat', () => {
   const messages = ref<ChatMessage[]>([])
   const isTyping = ref(false)
   const thinkingEnabled = ref(false) // 是否开启思考模式
+  const sessionId = ref<string | null>(null) // 当前会话 ID
+  const sessions = ref<ChatSession[]>([]) // 会话列表
+  const sessionsLoading = ref(false) // 会话列表加载状态
 
   const hasMessages = computed(() => messages.value.length > 0)
 
@@ -63,6 +75,7 @@ export const useChatStore = defineStore('chat', () => {
     const requestBody: Record<string, unknown> = {
       message: content,
       history,
+      session_id: sessionId.value, // 传入当前会话 ID，null 时后端自动创建新会话
     }
 
     if (thinkingEnabled.value) {
@@ -95,6 +108,18 @@ export const useChatStore = defineStore('chat', () => {
           timestamp: Date.now(),
         }
         messages.value.push(assistantMsg)
+
+        // 保存后端返回的 session_id
+        if (data.session_id) {
+          const isNewSession = sessionId.value === null
+          sessionId.value = data.session_id
+          // 立即刷新会话列表
+          fetchSessions()
+          // 新建会话时，后端异步生成标题，轮询直到标题更新
+          if (isNewSession) {
+            pollForTitle(data.session_id)
+          }
+        }
       } else {
         const assistantMsg: ChatMessage = {
           id: crypto.randomUUID(),
@@ -118,10 +143,130 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  function clearMessages() {
+  /**
+   * 获取会话列表
+   */
+  async function fetchSessions() {
+    sessionsLoading.value = true
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/chat/sessions`)
+      const data = await response.json()
+      if (data.success && data.sessions) {
+        sessions.value = data.sessions
+      }
+    } catch (error) {
+      console.error('获取会话列表失败:', error)
+    } finally {
+      sessionsLoading.value = false
+    }
+  }
+
+  /**
+   * 轮询等待后端异步生成的标题更新
+   * 每 3 秒拉一次列表，检查标题是否已生成，最多 10 次（30 秒）
+   */
+  function pollForTitle(targetId: string) {
+    let attempts = 0
+    const maxAttempts = 10
+    const interval = setInterval(async () => {
+      attempts++
+      await fetchSessions()
+      const session = sessions.value.find((s) => s.session_id === targetId)
+      // 标题已更新（非空且不是默认占位）或达到上限则停止
+      if ((session && session.title && session.title !== '新对话') || attempts >= maxAttempts) {
+        clearInterval(interval)
+      }
+    }, 3000)
+  }
+
+  /**
+   * 加载指定会话的详情（消息列表）
+   */
+  async function loadSession(targetSessionId: string) {
+    isTyping.value = true
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/chat/session`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ session_id: targetSessionId }),
+      })
+      const data = await response.json()
+      if (data.success && data.session) {
+        sessionId.value = data.session.session_id
+        // 将后端返回的 messages 转换为前端 ChatMessage 格式
+        messages.value = data.session.messages.map(
+          (msg: { role: string; content: string }, index: number) => ({
+            id: `${data.session.session_id}-${index}`,
+            role: msg.role as 'user' | 'assistant',
+            content: msg.content,
+            timestamp: Date.now(),
+          }),
+        )
+      }
+    } catch (error) {
+      console.error('加载会话详情失败:', error)
+    } finally {
+      isTyping.value = false
+    }
+  }
+
+  /**
+   * 删除指定会话
+   */
+  async function deleteSession(targetSessionId: string) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/chat/session/delete`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ session_id: targetSessionId }),
+      })
+      const data = await response.json()
+      if (data.success) {
+        // 从列表中移除
+        sessions.value = sessions.value.filter((s) => s.session_id !== targetSessionId)
+        // 如果删除的是当前会话，则清空聊天区
+        if (sessionId.value === targetSessionId) {
+          clearMessages()
+        }
+      }
+    } catch (error) {
+      console.error('删除会话失败:', error)
+    }
+  }
+
+  /**
+   * 发起新对话：清空当前消息和 sessionId
+   */
+  function newChat() {
     messages.value = []
+    sessionId.value = null
     isTyping.value = false
   }
 
-  return { messages, isTyping, hasMessages, thinkingEnabled, sendMessage, clearMessages, toggleThinking }
+  function clearMessages() {
+    messages.value = []
+    sessionId.value = null
+    isTyping.value = false
+  }
+
+  return {
+    messages,
+    isTyping,
+    hasMessages,
+    thinkingEnabled,
+    sessionId,
+    sessions,
+    sessionsLoading,
+    sendMessage,
+    clearMessages,
+    toggleThinking,
+    fetchSessions,
+    loadSession,
+    deleteSession,
+    newChat,
+  }
 })

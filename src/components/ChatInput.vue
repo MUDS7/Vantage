@@ -141,6 +141,7 @@ function removeFile(id: string) {
           v-model="inputText"
           type="text"
           placeholder="问问 Gemini 3"
+          autocomplete="off"
           class="text-input"
           @keydown="handleKeydown"
         />
