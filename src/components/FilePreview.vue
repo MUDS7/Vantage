@@ -6,6 +6,7 @@ import { API_BASE_URL } from '@/config'
 const props = defineProps<{
   folderName: string
   fileName: string
+  pageNumber?: number
 }>()
 
 const loading = ref(false)
@@ -692,7 +693,8 @@ async function loadPreview(folderName: string, fileName: string) {
         const blob = new Blob([arrayBuffer], { type: 'application/pdf' })
         const blobUrl = URL.createObjectURL(blob)
         currentObjectUrl = blobUrl
-        pdfUrl.value = blobUrl
+        // 如果指定了页码，拼接 #page=N 实现跳转
+        pdfUrl.value = props.pageNumber ? `${blobUrl}#page=${props.pageNumber}` : blobUrl
         break
       }
 

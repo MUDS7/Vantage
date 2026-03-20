@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, reactive, nextTick, watch } from 'vue'
-import { Sparkles, ThumbsUp, ThumbsDown, RefreshCw, Copy, MoreVertical, Brain, ChevronDown, FileText } from 'lucide-vue-next'
-import { useChatStore } from '../stores/chat'
+import { Sparkles, ThumbsUp, ThumbsDown, RefreshCw, Copy, MoreVertical, Brain, ChevronDown, FileText, ExternalLink } from 'lucide-vue-next'
+import { useChatStore, type ReferenceInfo } from '../stores/chat'
+import { useViewStore } from '../stores/view'
 import { marked } from 'marked'
 
 // 配置 marked 选项
@@ -19,6 +20,7 @@ function renderMarkdown(text: string): string {
 }
 
 const chatStore = useChatStore()
+const viewStore = useViewStore()
 const scrollContainer = ref<HTMLElement | null>(null)
 
 // 追踪每条思维链消息的折叠状态
@@ -87,6 +89,23 @@ function resendMessage(msgId: string) {
   chatStore.messages.splice(idx)
   // 重新发送（带上文件）
   chatStore.sendMessage(content, files && files.length > 0 ? files : undefined)
+}
+
+/**
+ * 点击引用来源，跳转到文件预览并定位页码
+ */
+function navigateToReference(ref: ReferenceInfo) {
+  // 从 file_path 提取文件夹名，格式为 "data/uploads/{folderName}/{fileName}"
+  const parts = ref.file_path.split('/')
+  // 文件夹名是倒数第二个部分
+  const folderName = parts.length >= 2 ? parts[parts.length - 2]! : ''
+  if (!folderName) return
+
+  viewStore.requestFilePreview({
+    folderName,
+    fileName: ref.file_name,
+    pageNumber: ref.page_number > 0 ? ref.page_number : undefined,
+  })
 }
 </script>
 
@@ -172,13 +191,15 @@ function resendMessage(msgId: string) {
                   v-for="(ref, rIdx) in msg.references"
                   :key="rIdx"
                   :id="'ref-' + msg.id + '-' + rIdx"
-                  class="reference-item"
+                  class="reference-item reference-item--clickable"
+                  @click="navigateToReference(ref)"
                 >
                   <div class="reference-header">
                     <FileText :size="13" class="reference-file-icon" />
                     <span class="reference-file-name">{{ ref.file_name }}</span>
                     <span v-if="ref.page_number > 0" class="reference-page">第{{ ref.page_number }}页</span>
                     <span class="reference-chunk">#{{ ref.chunk_index }}</span>
+                    <ExternalLink :size="11" class="reference-link-icon" />
                   </div>
                   <div v-if="ref.snippet" class="reference-snippet">{{ ref.snippet }}</div>
                 </div>
@@ -705,6 +726,28 @@ function resendMessage(msgId: string) {
 .reference-item:hover {
   background: rgba(0, 0, 0, 0.045);
   border-color: rgba(0, 0, 0, 0.1);
+}
+
+.reference-item--clickable {
+  cursor: pointer;
+}
+
+.reference-item--clickable:hover {
+  border-color: rgba(59, 130, 246, 0.3);
+  background: rgba(59, 130, 246, 0.04);
+}
+
+.reference-link-icon {
+  color: var(--color-text-muted, #9ca3af);
+  opacity: 0;
+  flex-shrink: 0;
+  margin-left: auto;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.reference-item--clickable:hover .reference-link-icon {
+  opacity: 1;
+  color: #3b82f6;
 }
 
 .reference-header {
