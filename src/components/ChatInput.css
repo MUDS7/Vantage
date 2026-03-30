@@ -1,0 +1,496 @@
+.hidden-file-input {
+  display: none;
+}
+
+.chat-input-wrapper {
+  width: 100%;
+  max-width: 672px;
+}
+
+.chat-input-card {
+  border-radius: var(--radius-2xl);
+  border: 1px solid var(--input-border);
+  background: var(--input-bg);
+  box-shadow: var(--input-shadow);
+  overflow: hidden;
+  transition: box-shadow var(--transition-normal), border-color var(--transition-normal);
+}
+
+.chat-input-card:focus-within {
+  border-color: #d1d5db;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.07);
+}
+
+/* File Preview Area */
+.file-preview-area {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: var(--space-md) var(--space-lg) 0;
+}
+
+.file-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--color-hover, rgba(0, 0, 0, 0.04));
+  border-radius: 12px;
+  max-width: 240px;
+  position: relative;
+  animation: fileCardIn 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes fileCardIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.file-thumb {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.file-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.file-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  color: #fff;
+}
+
+.file-icon--document {
+  background: linear-gradient(135deg, #4285f4, #3367d6);
+}
+
+.file-icon--video {
+  background: linear-gradient(135deg, #ea4335, #c5221f);
+}
+
+.file-icon--audio {
+  background: linear-gradient(135deg, #fbbc04, #f29900);
+}
+
+.file-icon--archive {
+  background: linear-gradient(135deg, #34a853, #1e8e3e);
+}
+
+.file-icon--file {
+  background: linear-gradient(135deg, #9aa0a6, #6e7479);
+}
+
+.file-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.file-name {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-size {
+  font-size: 0.6875rem;
+  color: var(--color-text-secondary);
+}
+
+.file-remove-btn {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--color-text-secondary, #6b7280);
+  color: #fff;
+  border: 2px solid var(--input-bg, #fff);
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(0.8);
+  transition: opacity 0.15s ease, transform 0.15s ease, background 0.15s ease;
+}
+
+.file-card:hover .file-remove-btn {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.file-remove-btn:hover {
+  background: #ef4444;
+}
+
+.input-area {
+  padding: var(--space-md) var(--space-lg);
+}
+
+.text-input {
+  width: 100%;
+  font-size: 1rem;
+  color: var(--color-text-primary);
+  line-height: 1.5;
+}
+
+.text-input::placeholder {
+  color: var(--color-text-placeholder);
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid var(--color-border-light);
+  padding: var(--space-sm);
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.toolbar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-full);
+  color: var(--color-text-secondary);
+  transition: all var(--transition-fast);
+}
+
+.toolbar-btn:hover {
+  background: var(--input-btn-bg-hover);
+  color: var(--color-text-primary);
+  transform: scale(1.05);
+}
+
+.toolbar-btn:active {
+  transform: scale(0.95);
+}
+
+/* 思考模式按钮 */
+.thinking-btn {
+  position: relative;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease;
+}
+
+.thinking-brain-icon {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), filter 0.3s ease;
+}
+
+.thinking-btn:hover {
+  color: #7c3aed;
+  background: rgba(139, 92, 246, 0.1);
+  transform: translateY(-1px) scale(1.08);
+  box-shadow: 0 3px 10px rgba(139, 92, 246, 0.15);
+}
+
+.thinking-btn:hover .thinking-brain-icon {
+  transform: rotate(-8deg) scale(1.1);
+  filter: drop-shadow(0 0 3px rgba(139, 92, 246, 0.4));
+}
+
+.thinking-btn:active {
+  transform: scale(0.95);
+}
+
+/* 激活态 */
+.thinking-btn--active {
+  color: #7c3aed;
+  background: rgba(139, 92, 246, 0.15);
+  border: 1.5px solid rgba(139, 92, 246, 0.4);
+  box-shadow: 0 0 8px rgba(139, 92, 246, 0.2);
+  animation: thinkingPulse 2.5s ease-in-out infinite;
+}
+
+.thinking-btn--active .thinking-brain-icon {
+  filter: drop-shadow(0 0 3px rgba(139, 92, 246, 0.5));
+  animation: brainGlow 2.5s ease-in-out infinite;
+}
+
+.thinking-btn--active:hover {
+  background: rgba(139, 92, 246, 0.18);
+  transform: translateY(-1px) scale(1.08);
+  animation: none;
+  box-shadow: 0 3px 12px rgba(139, 92, 246, 0.25);
+}
+
+.thinking-btn--active:hover .thinking-brain-icon {
+  animation: none;
+  transform: rotate(-8deg) scale(1.1);
+  filter: drop-shadow(0 0 5px rgba(139, 92, 246, 0.5));
+}
+
+@keyframes thinkingPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(139, 92, 246, 0);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.1);
+  }
+}
+
+@keyframes brainGlow {
+  0%, 100% {
+    filter: drop-shadow(0 0 1px rgba(139, 92, 246, 0.2));
+    transform: scale(1);
+  }
+  50% {
+    filter: drop-shadow(0 0 4px rgba(139, 92, 246, 0.45));
+    transform: scale(1.06);
+  }
+}
+
+/* 文档检索按钮 */
+.doc-search-btn {
+  position: relative;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease;
+}
+
+.doc-search-icon {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), filter 0.3s ease;
+}
+
+.doc-search-btn:hover {
+  color: #0d9488;
+  background: rgba(20, 184, 166, 0.1);
+  transform: translateY(-1px) scale(1.08);
+  box-shadow: 0 3px 10px rgba(20, 184, 166, 0.15);
+}
+
+.doc-search-btn:hover .doc-search-icon {
+  transform: rotate(-8deg) scale(1.1);
+  filter: drop-shadow(0 0 3px rgba(20, 184, 166, 0.4));
+}
+
+.doc-search-btn:active {
+  transform: scale(0.95);
+}
+
+/* 文档检索激活态 */
+.doc-search-btn--active {
+  color: #0d9488;
+  background: rgba(20, 184, 166, 0.15);
+  border: 1.5px solid rgba(20, 184, 166, 0.4);
+  box-shadow: 0 0 8px rgba(20, 184, 166, 0.2);
+  animation: docSearchPulse 2.5s ease-in-out infinite;
+}
+
+.doc-search-btn--active .doc-search-icon {
+  filter: drop-shadow(0 0 3px rgba(20, 184, 166, 0.5));
+  animation: docSearchGlow 2.5s ease-in-out infinite;
+}
+
+.doc-search-btn--active:hover {
+  background: rgba(20, 184, 166, 0.18);
+  transform: translateY(-1px) scale(1.08);
+  animation: none;
+  box-shadow: 0 3px 12px rgba(20, 184, 166, 0.25);
+}
+
+.doc-search-btn--active:hover .doc-search-icon {
+  animation: none;
+  transform: rotate(-8deg) scale(1.1);
+  filter: drop-shadow(0 0 5px rgba(20, 184, 166, 0.5));
+}
+
+@keyframes docSearchPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(20, 184, 166, 0);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(20, 184, 166, 0.1);
+  }
+}
+
+@keyframes docSearchGlow {
+  0%, 100% {
+    filter: drop-shadow(0 0 1px rgba(20, 184, 166, 0.2));
+    transform: scale(1);
+  }
+  50% {
+    filter: drop-shadow(0 0 4px rgba(20, 184, 166, 0.45));
+    transform: scale(1.06);
+  }
+}
+
+/* 文件夹选择按钮 */
+.folder-select-wrapper {
+  position: relative;
+}
+
+.folder-select-btn {
+  position: relative;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease;
+}
+
+.folder-select-icon {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), filter 0.3s ease;
+}
+
+.folder-select-btn:hover {
+  color: #d97706;
+  background: rgba(245, 158, 11, 0.1);
+  transform: translateY(-1px) scale(1.08);
+  box-shadow: 0 3px 10px rgba(245, 158, 11, 0.15);
+}
+
+.folder-select-btn:hover .folder-select-icon {
+  transform: rotate(-8deg) scale(1.1);
+  filter: drop-shadow(0 0 3px rgba(245, 158, 11, 0.4));
+}
+
+.folder-select-btn:active {
+  transform: scale(0.95);
+}
+
+/* 文件夹选择激活态 */
+.folder-select-btn--active {
+  color: #d97706;
+  background: rgba(245, 158, 11, 0.15);
+  border: 1.5px solid rgba(245, 158, 11, 0.4);
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.2);
+  animation: folderSelectPulse 2.5s ease-in-out infinite;
+}
+
+.folder-select-btn--active .folder-select-icon {
+  filter: drop-shadow(0 0 3px rgba(245, 158, 11, 0.5));
+  animation: folderSelectGlow 2.5s ease-in-out infinite;
+}
+
+.folder-select-btn--active:hover {
+  background: rgba(245, 158, 11, 0.18);
+  transform: translateY(-1px) scale(1.08);
+  animation: none;
+  box-shadow: 0 3px 12px rgba(245, 158, 11, 0.25);
+}
+
+.folder-select-btn--active:hover .folder-select-icon {
+  animation: none;
+  transform: rotate(-8deg) scale(1.1);
+  filter: drop-shadow(0 0 5px rgba(245, 158, 11, 0.5));
+}
+
+@keyframes folderSelectPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.1);
+  }
+}
+
+@keyframes folderSelectGlow {
+  0%, 100% {
+    filter: drop-shadow(0 0 1px rgba(245, 158, 11, 0.2));
+    transform: scale(1);
+  }
+  50% {
+    filter: drop-shadow(0 0 4px rgba(245, 158, 11, 0.45));
+    transform: scale(1.06);
+  }
+}
+
+/* 文件夹卡片样式 */
+.folder-card {
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  background: rgba(245, 158, 11, 0.06);
+}
+
+.file-icon--folder {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+}
+
+.send-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-full);
+  background: var(--input-btn-bg);
+  color: var(--sidebar-text);
+  transition: all var(--transition-fast);
+}
+
+.send-btn:hover {
+  background: var(--input-btn-bg-hover);
+  color: var(--color-text-primary);
+  transform: scale(1.05);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+
+.send-btn:active {
+  transform: scale(0.95);
+}
+
+/* Tooltip implementation */
+[data-tooltip] {
+  position: relative;
+}
+
+[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 110%;
+  left: 50%;
+  transform: translateX(-50%) translateY(5px);
+  padding: 5px 10px;
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  font-size: 11px;
+  line-height: 1.2;
+  border-radius: 6px;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s ease;
+  pointer-events: none;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* 防止左侧第一个 Tooltip 超出屏幕 */
+.toolbar-left > [data-tooltip]:first-child::after {
+  left: 0;
+  transform: translateX(0) translateY(5px);
+}
+
+.toolbar-left > [data-tooltip]:first-child:hover::after {
+  transform: translateX(0) translateY(0);
+}
+
+[data-tooltip]:hover::after {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
