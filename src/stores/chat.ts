@@ -79,7 +79,7 @@ export const useChatStore = defineStore('chat', () => {
     docSearchEnabled.value = !docSearchEnabled.value
   }
 
-  async function sendMessage(content: string, files?: File[]) {
+  async function sendMessage(content: string, files?: File[], folders?: string[]) {
     // 构建文件元信息
     const messageFiles: MessageFile[] | undefined = files?.map((f) => ({
       name: f.name,
@@ -122,6 +122,10 @@ export const useChatStore = defineStore('chat', () => {
         if (thinkingEnabled.value) {
           ragBody.thinking = true
         }
+        // 指定检索的文件夹范围
+        if (folders && folders.length > 0) {
+          ragBody.folder = folders
+        }
         response = await fetch(`${API_BASE_URL}/api/chat/rag`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -149,6 +153,11 @@ export const useChatStore = defineStore('chat', () => {
           for (const file of files) {
             formData.append('files', file)
           }
+        }
+
+        // 指定检索的文件夹范围
+        if (folders && folders.length > 0) {
+          formData.append('folders', JSON.stringify(folders))
         }
 
         response = await fetch(`${API_BASE_URL}/api/chat`, {
