@@ -51,6 +51,17 @@ export const useChatStore = defineStore('chat', () => {
   const sessions = ref<ChatSession[]>([]) // 会话列表
   const sessionsLoading = ref(false) // 会话列表加载状态
 
+  /**
+   * 按更新时间倒序排列的会话列表（最新的在最上面）
+   */
+  const sortedSessions = computed(() => {
+    return [...sessions.value].sort((a, b) => {
+      const timeA = new Date(a.updated_at || a.created_at).getTime()
+      const timeB = new Date(b.updated_at || b.created_at).getTime()
+      return timeB - timeA
+    })
+  })
+
   const hasMessages = computed(() => messages.value.length > 0)
 
   /**
@@ -333,6 +344,7 @@ export const useChatStore = defineStore('chat', () => {
     docSearchEnabled,
     sessionId,
     sessions,
+    sortedSessions,
     sessionsLoading,
     sendMessage,
     clearMessages,

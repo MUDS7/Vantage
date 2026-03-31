@@ -103,7 +103,7 @@ async function handleDeleteSession(sessionId: string, event: Event) {
 
         <!-- 会话列表 -->
         <button
-          v-for="session in chatStore.sessions"
+          v-for="session in chatStore.sortedSessions"
           :key="session.session_id"
           :id="'session-' + session.session_id"
           class="conversation-item"
