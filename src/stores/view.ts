@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { defineStore } from 'pinia'
 
-export type ViewType = 'chat' | 'files'
+export type ViewType = 'chat' | 'files' | 'sensitive-words'
 
 export interface FilePreviewRequest {
   folderName: string

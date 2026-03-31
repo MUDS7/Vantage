@@ -134,9 +134,9 @@ async function handleDeleteSession(sessionId: string, event: Event) {
 
     <!-- Footer -->
     <div id="sidebar-footer" class="sidebar-footer">
-      <button id="settings-btn" class="sidebar-btn full-width">
+      <button id="settings-btn" class="sidebar-btn full-width" :class="{ active: viewStore.currentView === 'sensitive-words' }" @click="viewStore.setView('sensitive-words')">
         <Settings :size="20" />
-        <span id="settings-text">设置和帮助</span>
+        <span id="settings-text">敏感词设置</span>
       </button>
 
 

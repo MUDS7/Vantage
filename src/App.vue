@@ -4,6 +4,7 @@ import AppHeader from './components/AppHeader.vue'
 import ChatInput from './components/ChatInput.vue'
 import ChatMessages from './components/ChatMessages.vue'
 import FileManager from './components/FileManager.vue'
+import SensitiveWords from './components/SensitiveWords.vue'
 import { Sparkles } from 'lucide-vue-next'
 import { Menu } from 'lucide-vue-next'
 import { useSidebarStore } from './stores/sidebar'
@@ -66,8 +67,13 @@ const chatStore = useChatStore()
       </div>
 
       <!-- File Manager -->
-      <div v-else class="files-area">
+      <div v-else-if="viewStore.currentView === 'files'" class="files-area">
         <FileManager />
+      </div>
+
+      <!-- Sensitive Words -->
+      <div v-else-if="viewStore.currentView === 'sensitive-words'" class="files-area">
+        <SensitiveWords />
       </div>
     </main>
   </div>
