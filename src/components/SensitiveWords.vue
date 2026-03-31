@@ -28,11 +28,28 @@ const isLoading = ref(false)
 const searchQuery = ref('')
 const selectedWord = ref<SensitiveWord | null>(null)
 const isAddDialogOpen = ref(false)
+const originalWord = ref('')
 const newWord = ref({ 
   word: '',
   match_strategy: 'exact',
   replace_strategy: 'mask'
 })
+
+// Toast State
+const showToast = ref(false)
+const toastMessage = ref('')
+const toastType = ref<'success' | 'error' | 'info'>('success')
+let toastTimer: any = null
+
+function triggerToast(message: string, type: 'success' | 'error' | 'info' = 'success') {
+  if (toastTimer) clearTimeout(toastTimer)
+  toastMessage.value = message
+  toastType.value = type
+  showToast.value = true
+  toastTimer = setTimeout(() => {
+    showToast.value = false
+  }, 3000)
+}
 
 async function fetchSensitiveWords() {
   isLoading.value = true
@@ -55,14 +72,48 @@ onMounted(() => {
 })
 
 function selectWord(word: SensitiveWord) {
-  selectedWord.value = word
+  selectedWord.value = { ...word }
+  originalWord.value = word.word
 }
 
-function deleteWord(wordStr: string) {
-  // 暂时保留前端删除逻辑，或后续对接删除接口
-  words.value = words.value.filter(w => w.word !== wordStr)
-  if (selectedWord.value?.word === wordStr) {
-    selectedWord.value = null
+async function deleteWord(wordStr: string) {
+  const word = wordStr?.trim()
+  if (!word) {
+    triggerToast('敏感词内容不能为空', 'error')
+    return
+  }
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/sensitive/delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ word })
+    })
+
+    if (response.ok) {
+      const data = await response.json().catch(() => ({}))
+      if (data.success) {
+        triggerToast(data.message || '敏感词删除成功', 'success')
+        await fetchSensitiveWords()
+        if (selectedWord.value?.word === word) {
+          selectedWord.value = null
+        }
+      } else {
+        triggerToast(data.message || '删除失败', 'error')
+      }
+    } else {
+      const errorData = await response.json().catch(() => ({}))
+      if (response.status === 404) {
+        triggerToast(errorData.message || `未找到敏感词: ${word}`, 'error')
+      } else if (response.status === 400) {
+        triggerToast(errorData.message || '敏感词内容不能为空', 'error')
+      } else {
+        triggerToast(errorData.message || '服务响应异常，删除失败', 'error')
+      }
+    }
+  } catch (error) {
+    console.error('删除敏感词异常:', error)
+    triggerToast('网络请求失败', 'error')
   }
 }
 
@@ -89,22 +140,53 @@ async function addWord() {
           replace_strategy: 'mask'
         }
         isAddDialogOpen.value = false
+        triggerToast('敏感词添加成功', 'success')
       } else {
-        alert(data.message || '添加失败')
+        triggerToast(data.message || '添加失败', 'error')
       }
     } else {
-      alert('后端服务异常，添加失败')
+      triggerToast('后端服务异常，添加失败', 'error')
     }
   } catch (error) {
     console.error('添加敏感词异常:', error)
-    alert('网络请求失败')
+    triggerToast('网络请求失败', 'error')
   }
 }
 
-function handleSave() {
-  if (!selectedWord.value) return
-  alert(`敏感词 「${selectedWord.value.word}」 的设置已保存`)
+async function handleSave() {
+  if (!selectedWord.value || !originalWord.value) return
+  
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/sensitive/update`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        old_word: originalWord.value,
+        new_word: selectedWord.value.word,
+        match_strategy: selectedWord.value.match_strategy,
+        replace_strategy: selectedWord.value.replace_strategy
+      })
+    })
+
+    if (response.ok) {
+      const data = await response.json()
+      if (data.success) {
+        triggerToast('敏感词配置更新成功', 'success')
+        originalWord.value = selectedWord.value.word // 更新成功后，当前词变为旧词
+        await fetchSensitiveWords() // 刷新列表
+      } else {
+        triggerToast(data.message || '更新失败', 'error')
+      }
+    } else {
+      const errorData = await response.json().catch(() => ({}))
+      triggerToast(errorData.message || '服务器响应异常，更新失败', 'error')
+    }
+  } catch (error) {
+    console.error('更新敏感词异常:', error)
+    triggerToast('网络请求失败，请稍后重试', 'error')
+  }
 }
+
 
 
 
@@ -176,7 +258,7 @@ function handleSave() {
           <div class="detail-card">
             <div class="detail-item">
               <label>敏感词</label>
-              <span>{{ selectedWord.word }}</span>
+              <input v-model="selectedWord.word" class="dialog-input" placeholder="请输入敏感词" />
             </div>
             <div class="detail-item">
               <label>创建时间</label>
@@ -211,6 +293,7 @@ function handleSave() {
     <!-- Add Dialog -->
     <Teleport to="body">
       <div v-if="isAddDialogOpen" class="dialog-overlay" @click.self="isAddDialogOpen = false">
+        <!-- ... (existing dialog content) ... -->
         <div class="dialog-content">
           <div class="dialog-header">
             <h3 class="dialog-title">增加敏感词</h3>
@@ -236,6 +319,20 @@ function handleSave() {
           </div>
         </div>
       </div>
+    </Teleport>
+
+    <!-- Global Toast Notification -->
+    <Teleport to="body">
+      <Transition name="toast">
+        <div v-if="showToast" class="toast-container" :class="toastType">
+          <div class="toast-icon">
+            <CheckCircle2 v-if="toastType === 'success'" :size="20" />
+            <XCircle v-else-if="toastType === 'error'" :size="20" />
+            <AlertCircle v-else :size="20" />
+          </div>
+          <p class="toast-message">{{ toastMessage }}</p>
+        </div>
+      </Transition>
     </Teleport>
   </div>
 </template>
@@ -417,5 +514,72 @@ function handleSave() {
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+/* Toast Styles */
+.toast-container {
+  position: fixed;
+  bottom: 32px;
+  right: 32px;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  min-width: 240px;
+  max-width: 400px;
+}
+
+.toast-container.success {
+  border-left: 4px solid #10b981;
+}
+
+.toast-container.success .toast-icon {
+  color: #10b981;
+}
+
+.toast-container.error {
+  border-left: 4px solid #ef4444;
+}
+
+.toast-container.error .toast-icon {
+  color: #ef4444;
+}
+
+.toast-container.info {
+  border-left: 4px solid #3b82f6;
+}
+
+.toast-container.info .toast-icon {
+  color: #3b82f6;
+}
+
+.toast-message {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #1f2937;
+}
+
+/* Toast Animation */
+.toast-enter-active,
+.toast-leave-active {
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.toast-enter-from {
+  opacity: 0;
+  transform: translateX(100px) scale(0.8);
+}
+
+.toast-leave-to {
+  opacity: 0;
+  transform: translateY(20px) scale(0.9);
 }
 </style>
