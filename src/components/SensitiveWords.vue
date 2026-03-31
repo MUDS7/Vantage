@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import {
   ShieldAlert,
   Plus,
+  FolderPlus,
   Trash2,
   AlertCircle,
   Search,
@@ -117,9 +118,9 @@ function handleSave() {
       <div id="word-tree-header" class="file-tree-header">
         <h2 class="file-tree-title">敏感词设置</h2>
         <div id="word-tree-actions" class="file-tree-actions">
-          <button class="fm-btn primary" @click="isAddDialogOpen = true">
-            <Plus :size="14" />
-            <span>添加敏感词</span>
+          <button class="fm-btn" @click="isAddDialogOpen = true">
+            <FolderPlus :size="14" />
+            <span>新建敏感词</span>
           </button>
         </div>
       </div>
